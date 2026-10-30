@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J.A.R.V.I.S.</title>
+<style>
+  :root {
+    --bg: #02060c;
+    --ciano: #5fd4ff;
+    --ciano-fraco: rgba(95, 212, 255, 0.35);
+    --ciano-linha: rgba(95, 212, 255, 0.18);
+    --ambar: #ffb547;
+    --vermelho: #ff5f6d;
+    --verde: #5dffa8;
+    --texto: #cdeeff;
+    --texto-fraco: rgba(205, 238, 255, 0.55);
+    --fonte: "Rajdhani", "Orbitron", "Segoe UI", "Ubuntu", system-ui, sans-serif;
+    --mono: "JetBrains Mono", "Ubuntu Mono", "DejaVu Sans Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    color: var(--texto);
+    font-family: var(--fonte);
+    background:
+      radial-gradient(ellipse at 50% 45%, #08263a 0%, #04121f 38%, var(--bg) 75%);
+  }
+
+  /* grade e linhas de varredura bem fracas, estilo HUD */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(0deg, rgba(95, 212, 255, 0.035) 0 1px, transparent 1px 4px),
+      linear-gradient(90deg, var(--ciano-linha) 1px, transparent 1px) 0 0 / 80px 80px,
+      linear-gradient(0deg, var(--ciano-linha) 1px, transparent 1px) 0 0 / 80px 80px;
+    opacity: 0.25;
+    mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
+  }
+
+  canvas#hud {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }
+
+  .titulo {
+    position: fixed;
+    top: 22px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    pointer-events: none;
+  }
+  .titulo h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: 0.7em;
+    padding-left: 0.7em;
+    color: var(--ciano);
+    text-shadow: 0 0 12px var(--ciano-fraco);
+  }
+  .titulo p {
+    margin: 4px 0 0;
+    font-size: 11px;
+    letter-spacing: 0.35em;
+    color: var(--texto-fraco);
+    text-transform: uppercase;
+  }
+
+  .painel {
+    position: fixed;
+    top: 24px;
+    min-width: 210px;
+    padding: 12px 16px;
+    border: 1px solid var(--ciano-linha);
+    background: rgba(4, 18, 31, 0.55);
+    backdrop-filter: blur(4px);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  }
+  .painel.esq { left: 24px; }
+  .painel.dir { right: 24px; }
+  .painel h2 {
+    margin: 0 0 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3em;
+    color: var(--ciano);
+  }
+  .relogio {
+    font-family: var(--mono);
+    font-size: 30px;
+    color: var(--ciano);
+    text-shadow: 0 0 10px var(--ciano-fraco);
+  }
+  .data { color: var(--texto-fraco); margin-bottom: 10px; }
+  .linha { display: flex; justify-content: space-between; gap: 14px; padding: 2px 0; }
+  .linha span:first-child { color: var(--texto-fraco); }
+  .linha span:last-child { font-family: var(--mono); font-size: 12px; text-align: right; }
+  .ponto {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-left: 8px;
+    border-radius: 50%;
+    background: #36505f;
+    vertical-align: middle;
+  }
+  .ponto.ok { background: var(--verde); box-shadow: 0 0 8px var(--verde); }
+  .ponto.espera { background: var(--ambar); box-shadow: 0 0 8px var(--ambar); }
+  .ponto.erro { background: var(--vermelho); box-shadow: 0 0 8px var(--vermelho); }
+
+  .estado {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: calc(42% + 28vmin + 10px);
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.45em;
+    padding-left: 0.45em;
+    color: var(--ciano);
+    text-shadow: 0 0 10px var(--ciano-fraco);
+    pointer-events: none;
+  }
+
+  .legenda {
+    position: fixed;
+    left: 50%;
+    bottom: 96px;
+    transform: translateX(-50%);
+    width: min(900px, calc(100% - 32px));
+    max-height: 22vh;
+    overflow-y: auto;
+    text-align: center;
+    pointer-events: auto;
+  }
+  .legenda .voce { color: var(--texto-fraco); font-size: 16px; margin-bottom: 6px; }
+  .legenda .jarvis { font-size: 20px; line-height: 1.4; text-shadow: 0 0 8px rgba(0, 0, 0, 0.9); }
+  .legenda .erro { color: var(--vermelho); font-size: 16px; }
+  .legenda code { font-family: var(--mono); color: var(--ciano); }
+  .legenda a { color: var(--ciano); }
+  .legenda strong { color: #fff; }
+
+  .controles {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    width: min(760px, calc(100% - 32px));
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .controles input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--ciano-linha);
+    background: rgba(4, 18, 31, 0.75);
+    color: var(--texto);
+    font: 16px var(--fonte);
+    letter-spacing: 0.04em;
+    outline: none;
+  }
+  .controles input[type="text"]:focus { border-color: var(--ciano); box-shadow: 0 0 10px var(--ciano-fraco); }
+  .controles button {
+    height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--ciano-linha);
+    background: rgba(4, 18, 31, 0.75);
+    color: var(--ciano);
+    font: 600 12px var(--fonte);
+    letter-spacing: 0.18em;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .controles button:hover { border-color: var(--ciano); }
+  .controles button[aria-pressed="true"] { background: rgba(95, 212, 255, 0.16); border-color: var(--ciano); }
+  .controles button#mic { width: 52px; padding: 0; font-size: 20px; }
+
+  .dica {
+    position: fixed;
+    right: 24px;
+    bottom: 32px;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--texto-fraco);
+    pointer-events: none;
+  }
+
+  @media (max-width: 900px) {
+    .painel { display: none; }
+    .dica { display: none; }
+  }
+  @media (max-width: 520px) {
+    .controles button { padding: 0 8px; letter-spacing: 0.08em; }
+    .controles button#mic { width: 44px; }
+    .legenda .jarvis { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="hud" aria-label="Núcleo do Jarvis. Clique para falar."></canvas>
+
+<header class="titulo">
+  <h1>J.A.R.V.I.S.</h1>
+  <p>Just A Rather Very Intelligent System</p>
+</header>
+
+<section class="painel esq" aria-label="Sistema">
+  <div class="relogio" id="relogio">--:--:--</div>
+  <div class="data" id="data"></div>
+  <h2>SISTEMA</h2>
+  <div class="linha"><span>Modelo</span><span id="info-modelo">—</span></div>
+  <div class="linha"><span>Agente</span><span id="info-agente">—</span></div>
+  <div class="linha"><span>Motor</span><span id="info-motor">—</span></div>
+</section>
+
+<section class="painel dir" aria-label="Status">
+  <h2>STATUS</h2>
+  <div class="linha"><span>Servidor</span><span><i class="ponto" id="st-servidor"></i></span></div>
+  <div class="linha"><span>Cérebro (IA)</span><span><i class="ponto" id="st-cerebro"></i></span></div>
+  <div class="linha"><span>Ouvido</span><span><i class="ponto" id="st-ouvido"></i></span></div>
+  <div class="linha"><span>Voz</span><span><i class="ponto" id="st-voz"></i></span></div>
+</section>
+
+<div class="estado" id="estado" aria-live="polite">INICIANDO</div>
+
+<div class="legenda" id="legenda" aria-live="polite"></div>
+
+<form class="controles" id="form" autocomplete="off">
+  <button type="button" id="mic" aria-label="Falar com o Jarvis" title="Falar (Espaço)">🎙</button>
+  <input type="text" id="texto" placeholder="Escreva para o Jarvis…">
+  <button type="button" id="continuo" aria-pressed="true" title="Depois de responder, o Jarvis volta a ouvir sozinho">CONVERSA</button>
+  <button type="button" id="mudo" aria-pressed="false" title="Desliga a voz do Jarvis">MUDO</button>
+</form>
+
+<div class="dica">ESPAÇO: FALAR · ESC: PARAR</div>
+
+<script>
+"use strict";
+
+// Servidor do Jarvis (jarvis serve). Dá para trocar com ?api=http://host:porta
+const API = new URLSearchParams(location.search).get("api") || "http://127.0.0.1:8000";
+
+const ROTULOS = {
+  offline: "SERVIDOR DESLIGADO",
+  idle: "TOQUE PARA FALAR",
+  listening: "OUVINDO",
+  transcribing: "ENTENDENDO",
+  thinking: "PENSANDO",
+  speaking: "FALANDO",
+};
+
+const $ = (id) => document.getElementById(id);
+const canvas = $("hud");
+const ctx = canvas.getContext("2d");
+
+let estado = "offline";
+let rotuloExtra = "";
+let info = { model: "", agent: "", engine: "" };
+let vozOk = false;
+let checandoVoz = false;
+let ouvidoOk = false;
+const historico = [];
+
+let audioCtx = null;
+let microfone = null;
+let micAnalisador = null;
+let saidaAnalisador = null;
+let gravador = null;
+let vadTimer = null;
+let fonteAtual = null;
+let abortador = null;
+let nivelMic = 0;
+let nivel = 0;
+
+function lerPref(chave, padrao) {
+  try {
+    const v = localStorage.getItem(chave);
+    return v === null ? padrao : v === "1";
+  } catch (e) {
+    return padrao;
+  }
+}
+function salvarPref(chave, valor) {
+  try { localStorage.setItem(chave, valor ? "1" : "0"); } catch (e) { /* sem armazenamento */ }
+}
+
+let continuo = lerPref("jarvis.continuo", true);
+let mudo = lerPref("jarvis.mudo", false);
+
+// ---------- estado e legenda ----------
+
+function mudarEstado(novo, extra = "") {
+  estado = novo;
+  rotuloExtra = extra;
+  $("estado").textContent = extra || ROTULOS[novo] || "";
+}
+
+function escapar(texto) {
+  return texto.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// Mostra negrito, código e links do jeito certo na legenda.
+function formatar(texto) {
+  return escapar(texto)
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\n/g, "<br>");
+}
+
+function legenda(voce, jarvis, erro) {
+  const el = $("legenda");
+  let html = "";
+  if (voce) html += `<div class="voce">Você: ${escapar(voce)}</div>`;
+  if (jarvis) html += `<div class="jarvis">${formatar(jarvis)}</div>`;
+  if (erro) html += `<div class="erro">${erro}</div>`;
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ---------- status do servidor ----------
+
+async function pegarJson(caminho) {
+  const r = await fetch(API + caminho, { cache: "no-store" });
+  if (!r.ok) throw new Error(String(r.status));
+  return r.json();
+}
+
+function ponto(id, classe) {
+  $(id).className = "ponto" + (classe ? " " + classe : "");
+}
+
+async function verificarStatus() {
+  try {
+    info = await pegarJson("/v1/info");
+  } catch (e) {
+    ponto("st-servidor", "erro");
+    ponto("st-cerebro", "");
+    ponto("st-ouvido", "");
+    ponto("st-voz", "");
+    if (estado !== "offline" || rotuloExtra) {
+      if (abortador) abortador.abort();
+      mudarEstado("offline");
+    }
+    legenda("", "", "Não encontrei o servidor do Jarvis. No terminal, rode <code>jarvis-tela</code>.");
+    return;
+  }
+  ponto("st-servidor", "ok");
+  $("info-modelo").textContent = info.model || "—";
+  $("info-agente").textContent = info.agent || "—";
+  $("info-motor").textContent = info.engine || "—";
+  if (estado === "offline") {
+    mudarEstado("idle");
+    legenda("", "Às suas ordens. Toque no núcleo ou aperte Espaço para falar.");
+  }
+
+  fetch(API + "/health", { cache: "no-store" })
+    .then((r) => ponto("st-cerebro", r.ok ? "ok" : "erro"))
+    .catch(() => ponto("st-cerebro", "erro"));
+
+  pegarJson("/v1/speech/health")
+    .then((j) => { ouvidoOk = !!j.available; ponto("st-ouvido", ouvidoOk ? "ok" : "erro"); })
+    .catch(() => { ouvidoOk = false; ponto("st-ouvido", "erro"); });
+
+  // A primeira checagem da voz carrega o Kokoro, que pode demorar.
+  if (!vozOk && !checandoVoz) {
+    checandoVoz = true;
+    ponto("st-voz", "espera");
+    pegarJson("/v1/speech/tts/health")
+      .then((j) => { vozOk = !!j.available; ponto("st-voz", vozOk ? "ok" : "erro"); })
+      .catch(() => ponto("st-voz", "erro"))
+      .finally(() => { checandoVoz = false; });
+  }
+}
+
+// ---------- áudio ----------
+
+async function prepararAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    saidaAnalisador = audioCtx.createAnalyser();
+    saidaAnalisador.fftSize = 512;
+    saidaAnalisador.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+}
+
+async function prepararMicrofone() {
+  if (microfone) return;
+  microfone = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  });
+  const fonte = audioCtx.createMediaStreamSource(microfone);
+  micAnalisador = audioCtx.createAnalyser();
+  micAnalisador.fftSize = 1024;
+  fonte.connect(micAnalisador);
+}
+
+function tipoGravacao() {
+  const tipos = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm", "audio/ogg"];
+  return tipos.find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || "";
+}
+
+// ---------- ouvir ----------
+
+async function ouvir() {
+  if (estado !== "idle") return;
+  if (!ouvidoOk) {
+    legenda("", "", "O ouvido do Jarvis (Whisper) não está pronto. Confira o status no canto direito.");
+    return;
+  }
+  try {
+    await prepararAudio();
+    await prepararMicrofone();
+  } catch (e) {
+    legenda("", "", "Não consegui usar o microfone. Libere o acesso ao microfone no navegador e tente de novo.");
+    return;
+  }
+
+  const tipo = tipoGravacao();
+  const pedacos = [];
+  const rec = new MediaRecorder(microfone, tipo ? { mimeType: tipo } : undefined);
+  rec.manter = true;
+  rec.ondataavailable = (e) => { if (e.data.size) pedacos.push(e.data); };
+  rec.onstop = () => {
+    if (gravador === rec) gravador = null;
+    if (!rec.manter) {
+      if (estado === "listening") mudarEstado("idle");
+      return;
+    }
+    entender(new Blob(pedacos, { type: pedacos[0] ? pedacos[0].type : tipo }));
+  };
+  gravador = rec;
+  rec.start();
+  mudarEstado("listening");
+  iniciarDeteccaoDeFala();
+}
+
+// Para de gravar sozinho quando você fica em silêncio depois de falar.
+function iniciarDeteccaoDeFala() {
+  const amostras = new Float32Array(micAnalisador.fftSize);
+  const inicio = performance.now();
+  let anterior = inicio;
+  let ruido = 0;
+  let nRuido = 0;
+  let falou = false;
+  let tempoFalando = 0;
+  let ultimaVoz = inicio;
+
+  vadTimer = setInterval(() => {
+    micAnalisador.getFloatTimeDomainData(amostras);
+    let soma = 0;
+    for (let i = 0; i < amostras.length; i++) soma += amostras[i] * amostras[i];
+    const rms = Math.sqrt(soma / amostras.length);
+    nivelMic = rms;
+
+    const agora = performance.now();
+    const dt = agora - anterior;
+    anterior = agora;
+
+    if (agora - inicio < 300) { ruido += rms; nRuido++; return; }
+    const fundo = nRuido ? ruido / nRuido : 0.005;
+    const limiar = Math.min(0.05, Math.max(0.012, fundo * 3));
+
+    if (rms > limiar) {
+      tempoFalando += dt;
+      ultimaVoz = agora;
+      if (tempoFalando > 200) falou = true;
+    }
+    if (falou && agora - ultimaVoz > 1200) return pararDeOuvir(true);
+    if (!falou && agora - inicio > 8000) {
+      legenda("", "Não ouvi nada. Toque no núcleo quando quiser falar.");
+      return pararDeOuvir(false);
+    }
+    if (agora - inicio > 30000) return pararDeOuvir(true);
+  }, 50);
+}
+
+function pararDeOuvir(manter) {
+  clearInterval(vadTimer);
+  vadTimer = null;
+  nivelMic = 0;
+  if (gravador && gravador.state !== "inactive") {
+    gravador.manter = manter;
+    gravador.stop();
+  }
+}
+
+async function entender(audio) {
+  mudarEstado("transcribing");
+  abortador = new AbortController();
+  const ext = audio.type.includes("ogg") ? "ogg" : "webm";
+  const form = new FormData();
+  form.append("file", audio, "fala." + ext);
+  form.append("language", "pt");
+  let texto = "";
+  try {
+    const r = await fetch(API + "/v1/speech/transcribe", { method: "POST", body: form, signal: abortador.signal });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.status);
+    texto = (j.text || "").trim();
+  } catch (e) {
+    if (e.name === "AbortError") return;
+    mudarEstado("idle");
+    legenda("", "", "Não consegui entender o áudio: " + escapar(String(e.message || e)));
+    return;
+  }
+  if (!texto) {
+    mudarEstado("idle");
+    legenda("", "Não entendi. Pode repetir?");
+    if (continuo) ouvir();
+    return;
+  }
+  perguntar(texto, true);
+}
+
+// ---------- pensar ----------
+
+async function perguntar(texto, porVoz) {
+  legenda(texto, "");
+  historico.push({ role: "user", content: texto });
+  mudarEstado("thinking");
+  abortador = new AbortController();
+  let resposta = "";
+  try {
+    const r = await fetch(API + "/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: info.model || "", messages: historico.slice(-20), stream: false }),
+      signal: abortador.signal,
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.status);
+    resposta = ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
+  } catch (e) {
+    historico.pop();
+    if (e.name === "AbortError") return;
+    mudarEstado("idle");
+    legenda(texto, "", "O Jarvis não conseguiu responder: " + escapar(String(e.message || e)));
+    return;
+  }
+  historico.push({ role: "assistant", content: resposta });
+  legenda(texto, resposta || "(sem resposta)");
+  const sinal = abortador.signal;
+  await falar(resposta, sinal);
+  // Esc ou uma nova pergunta cancelam o sinal; aí ele não volta a ouvir sozinho.
+  if (!sinal.aborted && estado === "idle" && porVoz && continuo) ouvir();
+}
+
+// ---------- falar ----------
+
+// Tira a formatação que não faz sentido em voz alta.
+function paraFala(texto) {
+  return texto
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+[.)])\s+/gm, "")
+    .replace(/[*_~|#]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 4800);
+}
+
+// Divide em frases para começar a falar antes de sintetizar tudo.
+function frases(texto) {
+  const partes = texto.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) || [texto];
+  const blocos = [];
+  let atual = "";
+  for (const p of partes) {
+    if ((atual + p).length > 280 && atual) { blocos.push(atual.trim()); atual = ""; }
+    atual += p;
+  }
+  if (atual.trim()) blocos.push(atual.trim());
+  return blocos;
+}
+
+async function sintetizar(texto, sinal) {
+  const r = await fetch(API + "/v1/speech/synthesize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: texto }),
+    signal: sinal,
+  });
+  if (!r.ok) {
+    let detalhe = r.status;
+    try { detalhe = (await r.json()).detail || detalhe; } catch (e) { /* corpo não é JSON */ }
+    throw new Error(detalhe);
+  }
+  return audioCtx.decodeAudioData(await r.arrayBuffer());
+}
+
+function tocar(buffer) {
+  return new Promise((resolve) => {
+    const fonte = audioCtx.createBufferSource();
+    fonte.buffer = buffer;
+    fonte.connect(saidaAnalisador);
+    fonte.onended = () => { if (fonteAtual === fonte) fonteAtual = null; resolve(); };
+    fonteAtual = fonte;
+    fonte.start();
+  });
+}
+
+async function falar(texto, sinal) {
+  const limpo = paraFala(texto);
+  if (mudo || !vozOk || !limpo) { mudarEstado("idle"); return; }
+  await prepararAudio();
+  mudarEstado("thinking", "PREPARANDO A VOZ");
+  const blocos = frases(limpo);
+  try {
+    let proximo = sintetizar(blocos[0], sinal);
+    for (let i = 0; i < blocos.length; i++) {
+      const buffer = await proximo;
+      if (i + 1 < blocos.length) {
+        proximo = sintetizar(blocos[i + 1], sinal);
+        proximo.catch(() => {}); // o erro aparece no próximo await
+      }
+      if (sinal.aborted) return;
+      mudarEstado("speaking");
+      await tocar(buffer);
+      if (sinal.aborted || estado !== "speaking") return;
+    }
+  } catch (e) {
+    if (sinal.aborted) return;
+    legenda("", texto, "Não consegui falar a resposta: " + escapar(String(e.message || e)));
+  }
+  mudarEstado("idle");
+}
+
+// ---------- cancelar e controles ----------
+
+function parar() {
+  if (abortador) abortador.abort();
+  if (fonteAtual) { try { fonteAtual.stop(); } catch (e) { /* já parou */ } fonteAtual = null; }
+  if (gravador) pararDeOuvir(false);
+  if (estado !== "offline") mudarEstado("idle");
+}
+
+function acaoPrincipal() {
+  if (estado === "idle") return ouvir();
+  if (estado === "listening") return pararDeOuvir(true);
+  if (estado === "speaking") { parar(); return ouvir(); }
+  if (estado === "thinking" || estado === "transcribing") return parar();
+}
+
+canvas.addEventListener("click", acaoPrincipal);
+$("mic").addEventListener("click", acaoPrincipal);
+
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const campo = $("texto");
+  const texto = campo.value.trim();
+  if (!texto || estado === "offline") return;
+  if (estado !== "idle") parar();
+  campo.value = "";
+  prepararAudio().catch(() => {});
+  perguntar(texto, false);
+});
+
+function atualizarBotoes() {
+  $("continuo").setAttribute("aria-pressed", String(continuo));
+  $("mudo").setAttribute("aria-pressed", String(mudo));
+}
+$("continuo").addEventListener("click", () => { continuo = !continuo; salvarPref("jarvis.continuo", continuo); atualizarBotoes(); });
+$("mudo").addEventListener("click", () => {
+  mudo = !mudo;
+  salvarPref("jarvis.mudo", mudo);
+  atualizarBotoes();
+  if (mudo && estado === "speaking") parar();
+});
+atualizarBotoes();
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { parar(); return; }
+  if (e.code === "Space" && document.activeElement !== $("texto")) {
+    e.preventDefault();
+    // Sem isso o Espaço também "clicaria" o último botão usado.
+    if (document.activeElement && document.activeElement.tagName === "BUTTON") document.activeElement.blur();
+    acaoPrincipal();
+  }
+});
+
+// ---------- relógio ----------
+
+function relogio() {
+  const agora = new Date();
+  $("relogio").textContent = agora.toLocaleTimeString("pt-BR");
+  const data = agora.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+  $("data").textContent = data.charAt(0).toUpperCase() + data.slice(1);
+}
+setInterval(relogio, 1000);
+relogio();
+
+// ---------- núcleo animado ----------
+
+const reduzirMovimento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const freq = new Uint8Array(256);
+const onda = new Float32Array(512);
+
+function corDoEstado() {
+  if (estado === "offline") return [255, 95, 109];
+  if (estado === "thinking" || estado === "transcribing") return [255, 181, 71];
+  return [95, 212, 255];
+}
+
+function rgba(c, a) {
+  return `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+}
+
+function nivelSaida() {
+  if (!saidaAnalisador || !fonteAtual) return 0;
+  saidaAnalisador.getFloatTimeDomainData(onda);
+  let soma = 0;
+  for (let i = 0; i < onda.length; i++) soma += onda[i] * onda[i];
+  return Math.min(1, Math.sqrt(soma / onda.length) * 5);
+}
+
+function redimensionar() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(innerWidth * dpr);
+  canvas.height = Math.round(innerHeight * dpr);
+}
+addEventListener("resize", redimensionar);
+redimensionar();
+
+function anel(cx, cy, r, largura, cor, segmentos, giro, preenchido) {
+  const passo = (Math.PI * 2) / segmentos;
+  ctx.lineWidth = largura;
+  ctx.strokeStyle = cor;
+  for (let i = 0; i < segmentos; i++) {
+    const a = giro + i * passo;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, a, a + passo * preenchido);
+    ctx.stroke();
+  }
+}
+
+function desenhar(t) {
+  const w = canvas.width;
+  const h = canvas.height;
+  const dpr = window.devicePixelRatio || 1;
+  const cx = w / 2;
+  const cy = h * 0.42;
+  const R = Math.min(w, h) * 0.12;
+  const vel = reduzirMovimento ? 0.25 : 1;
+  const cor = corDoEstado();
+
+  let alvo;
+  if (estado === "listening") alvo = Math.min(1, nivelMic * 10);
+  else if (estado === "speaking") alvo = nivelSaida();
+  else if (estado === "thinking" || estado === "transcribing") alvo = 0.3 + 0.15 * Math.sin(t / 160);
+  else if (estado === "offline") alvo = 0.03;
+  else alvo = 0.08 + 0.05 * Math.sin(t / 900);
+  nivel += (alvo - nivel) * 0.18;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+
+  // brilho de fundo
+  const brilho = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 3.2);
+  brilho.addColorStop(0, rgba(cor, 0.16 + nivel * 0.25));
+  brilho.addColorStop(1, rgba(cor, 0));
+  ctx.fillStyle = brilho;
+  ctx.fillRect(0, 0, w, h);
+
+  // régua externa com marcações
+  const ticks = 120;
+  const rr = R * 2.15;
+  ctx.lineWidth = 1 * dpr;
+  for (let i = 0; i < ticks; i++) {
+    const a = (i / ticks) * Math.PI * 2 + t * 0.00004 * vel;
+    const longo = i % 5 === 0;
+    const r1 = rr;
+    const r2 = rr + (longo ? 12 : 5) * dpr;
+    ctx.strokeStyle = rgba(cor, longo ? 0.5 : 0.22);
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+    ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
+    ctx.stroke();
+  }
+
+  // anéis tracejados girando em sentidos diferentes
+  const pensa = estado === "thinking" || estado === "transcribing" ? 4 : 1;
+  anel(cx, cy, R * 1.9, 2 * dpr, rgba(cor, 0.35), 3, -t * 0.0002 * vel * pensa, 0.28);
+  anel(cx, cy, R * 1.7, 6 * dpr, rgba(cor, 0.18 + nivel * 0.3), 24, t * 0.00035 * vel * pensa, 0.55);
+  anel(cx, cy, R * 1.52, 1.5 * dpr, rgba(cor, 0.5), 2, t * 0.0006 * vel * pensa, 0.4);
+  anel(cx, cy, R * 1.38, 3 * dpr, rgba(cor, 0.3), 60, -t * 0.00015 * vel, 0.5);
+
+  // varredura enquanto pensa
+  if (pensa > 1) {
+    const a = (t * 0.004 * vel) % (Math.PI * 2);
+    const varre = ctx.createConicGradient ? ctx.createConicGradient(a, cx, cy) : null;
+    if (varre) {
+      varre.addColorStop(0, rgba(cor, 0.35));
+      varre.addColorStop(0.12, rgba(cor, 0));
+      varre.addColorStop(1, rgba(cor, 0));
+      ctx.fillStyle = varre;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 2.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // barras de áudio em volta do núcleo
+  const barras = 96;
+  let dados = null;
+  if (estado === "listening" && micAnalisador) { micAnalisador.getByteFrequencyData(freq); dados = freq; }
+  else if (estado === "speaking" && saidaAnalisador) { saidaAnalisador.getByteFrequencyData(freq); dados = freq; }
+  ctx.lineWidth = 2.5 * dpr;
+  ctx.lineCap = "round";
+  for (let i = 0; i < barras; i++) {
+    const a = (i / barras) * Math.PI * 2 - Math.PI / 2;
+    const espelho = i < barras / 2 ? i : barras - 1 - i;
+    const v = dados ? dados[Math.floor(Math.pow(espelho / (barras / 2), 1.7) * 70) + 2] / 255 : 0;
+    const len = R * 0.06 + v * R * 0.5 + nivel * R * 0.08;
+    const r1 = R * 1.12;
+    ctx.strokeStyle = rgba(cor, 0.35 + v * 0.6);
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+    ctx.lineTo(cx + Math.cos(a) * (r1 + len), cy + Math.sin(a) * (r1 + len));
+    ctx.stroke();
+  }
+
+  // núcleo (reator)
+  const rc = R * (0.62 + nivel * 0.28);
+  const nucleo = ctx.createRadialGradient(cx, cy, 0, cx, cy, rc);
+  nucleo.addColorStop(0, "rgba(255,255,255,0.95)");
+  nucleo.addColorStop(0.35, rgba(cor, 0.85));
+  nucleo.addColorStop(0.75, rgba(cor, 0.25));
+  nucleo.addColorStop(1, rgba(cor, 0));
+  ctx.fillStyle = nucleo;
+  ctx.beginPath();
+  ctx.arc(cx, cy, rc, 0, Math.PI * 2);
+  ctx.fill();
+
+  // bobinas do reator
+  anel(cx, cy, R * 0.92, 7 * dpr, rgba(cor, 0.55 + nivel * 0.4), 10, -Math.PI / 2 + t * 0.0001 * vel, 0.7);
+  anel(cx, cy, R * 1.0, 1.2 * dpr, rgba(cor, 0.7), 1, 0, 1);
+  anel(cx, cy, R * 0.8, 1.2 * dpr, rgba(cor, 0.5), 1, 0, 1);
+
+  ctx.restore();
+  requestAnimationFrame(desenhar);
+}
+requestAnimationFrame(desenhar);
+
+// ---------- início ----------
+
+mudarEstado("offline", "CONECTANDO");
+verificarStatus();
+setInterval(verificarStatus, 5000);
+</script>
+</body>
+</html>

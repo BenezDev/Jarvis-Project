@@ -9,6 +9,7 @@ Versão 1.2
 * memória persistente
 * pesquisa web
 * comando de voz (fala com o microfone, o Jarvis responde falando)
+* tela estilo filme: um núcleo brilhante que reage quando ele ouve e fala
 * voz grátis em português (Kokoro, roda local)
 * opcional: o Jarvis roda comandos no seu PC (sempre pede confirmação)
 
@@ -50,7 +51,7 @@ Ele vai:
 2. rodar o instalador oficial do OpenJarvis (uv, Python, Ollama e o modelo `qwen3.5:2b`). Ele pergunta se você quer enviar estatísticas de uso: aperte `N` para não enviar.
 3. instalar a pesquisa web e a voz.
 4. configurar o Jarvis para usar as ferramentas, falar português e usar a voz `pm_alex`.
-5. instalar a personalidade do Jarvis (`config/SOUL.md`) e criar o atalho `jarvis-voz`.
+5. instalar a personalidade do Jarvis (`config/SOUL.md`) e criar os atalhos `jarvis-voz` e `jarvis-tela`.
 
 **5. Abra um terminal novo** (ou rode `source ~/.bashrc`).
 
@@ -59,6 +60,7 @@ Ele vai:
 ```bash
 jarvis        # conversa por texto
 jarvis-voz    # conversa por voz: aperte Enter e fale
+jarvis-tela   # abre a tela do Jarvis no navegador e conversa por voz
 ```
 
 Na primeira vez, o Jarvis ainda pode estar baixando modelos. Rode `jarvis doctor` para ver o andamento.
@@ -78,12 +80,29 @@ Pode rodar o instalador de novo quando quiser: ele pula o que já está instalad
 | Comando | Para quê |
 |---|---|
 | `jarvis` | conversar por texto |
-| `jarvis-voz` | conversar por voz |
+| `jarvis-voz` | conversar por voz no terminal |
+| `jarvis-tela` | abrir a tela do Jarvis e conversar por voz |
 | `jarvis ask "pergunta"` | fazer uma pergunta rápida |
-| `jarvis gui` | abrir o Jarvis no navegador |
+| `jarvis gui` | abrir a interface oficial do OpenJarvis (precisa do Node.js 22 ou mais novo) |
 | `jarvis doctor` | verificar se está tudo funcionando |
 | `jarvis memory index ~/Documentos` | ensinar ao Jarvis o conteúdo dos seus documentos |
 | `jarvis memory search "assunto"` | procurar algo nos documentos indexados |
+
+### Tela do Jarvis
+
+```bash
+jarvis-tela
+```
+
+Liga o servidor do Jarvis e abre a tela no navegador (`http://localhost:3000`). Na primeira vez demora alguns minutos e o navegador pede para usar o microfone: clique em **Permitir**.
+
+* **Falar:** toque no núcleo (ou aperte `Espaço`) e fale. Quando você fica em silêncio, ele entende, pensa e responde falando.
+* **Conversa:** com o botão `CONVERSA` ligado, depois de responder ele volta a ouvir sozinho. Aperte `Esc` para parar.
+* **Escrever:** também dá para digitar na caixa de texto.
+* **Mudo:** o botão `MUDO` desliga a voz dele; as respostas continuam aparecendo na tela.
+* O painel da direita mostra se o servidor, a IA, o ouvido (Whisper) e a voz (Kokoro) estão prontos.
+
+Deixe o terminal aberto enquanto usa. Para desligar, aperte `Ctrl` + `C` nele.
 
 ### Memória persistente
 
@@ -131,12 +150,24 @@ jarvis config set intelligence.default_model qwen3.5:9b
 * **O Jarvis não responde ou dá erro de modelo**: o modelo ainda está baixando. Rode `jarvis doctor`.
 * **O microfone não funciona**: confira se o microfone aparece em `arecord -l` (pacote `alsa-utils`). No WSL2, use o Windows 11 atualizado e libere o microfone em Configurações > Privacidade > Microfone.
 * **A voz não fala**: rode `bash instalar.sh` de novo para reinstalar o `espeak-ng` e as bibliotecas de voz.
+* **A tela mostra "SERVIDOR DESLIGADO"**: rode `jarvis-tela` no terminal e deixe ele aberto. Se o servidor parar com erro, o motivo fica em `~/.openjarvis/jarvis-tela.log`.
+
+## Atualizar
+
+Para pegar as novidades deste projeto (como a tela do Jarvis), entre na pasta dele e rode:
+
+```bash
+cd Jarvis-Project
+git pull
+bash instalar.sh
+```
 
 ## Desinstalar
 
 ```bash
 jarvis-uninstall
-rm -f ~/.local/bin/jarvis-voz
+rm -f ~/.local/bin/jarvis-voz ~/.local/bin/jarvis-tela
+rm -rf ~/.local/share/jarvis-project
 ```
 
 O `jarvis-uninstall` apaga o OpenJarvis e os dados dele (`~/.openjarvis`), mas não remove o Ollama nem o `uv`.
