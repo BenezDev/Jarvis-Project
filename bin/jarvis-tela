@@ -30,6 +30,15 @@ if [[ ! -f "$TELA_DIR/index.html" ]]; then
     exit 1
 fi
 
+# O servidor precisa achar o jarvis-pc mesmo quando aberto pelo botão.
+export PATH="$HOME/.local/bin:$PATH"
+
+# Guarda as variáveis da sessão gráfica para o jarvis-pc usar, já que os
+# comandos do Jarvis rodam sem elas.
+if command -v jarvis-pc >/dev/null 2>&1; then
+    jarvis-pc salvar-sessao
+fi
+
 servidor_ligado() { curl -fs -o /dev/null --max-time 2 "$API/v1/info"; }
 porta_livre() { ! (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 

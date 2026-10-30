@@ -1,0 +1,359 @@
+#!/usr/bin/env bash
+# jarvis-pc — comandos simples para o Jarvis controlar o computador:
+# programas, som, mídia, teclado, mouse, janelas e energia.
+#
+# O Jarvis roda comandos com um ambiente mínimo, sem as variáveis da sessão
+# gráfica (DISPLAY, DBUS...). Este script recupera essas variáveis do arquivo
+# que o jarvis-tela salva ao abrir, ou usa os valores padrão da sessão.
+
+set -uo pipefail
+
+DADOS="$HOME/.local/share/jarvis-project"
+SESSAO="$DADOS/sessao.env"
+PID_DESLIGAR="$DADOS/desligar.pid"
+
+uso() {
+    cat <<'EOF'
+Uso: jarvis-pc <ação> [argumentos]
+
+  abrir <programa|site|pasta>     ex.: abrir firefox · abrir youtube.com · abrir ~/Downloads
+  volume <+N|-N|N|mudo>           ex.: volume +10 · volume 50 · volume mudo
+  midia <tocar|pausar|alternar|proxima|anterior>
+  teclas <atalho>                 ex.: teclas ctrl+t · teclas alt+f4 · teclas enter
+  digitar <texto>                 digita onde o cursor estiver
+  mouse <x> <y>                   move o mouse para a posição
+  clicar [esquerdo|direito|meio|duplo]
+  rolar <cima|baixo> [vezes]
+  tela                            tamanho da tela e posição do mouse
+  janelas                         lista as janelas abertas
+  focar <nome>                    traz uma janela para a frente
+  bloquear                        bloqueia a tela
+  desligar <agora|minutos>        desliga o PC
+  cancelar-desligamento
+  salvar-sessao                   guarda as variáveis da sessão gráfica atual
+EOF
+}
+
+VARIAVEIS_SESSAO=(DISPLAY WAYLAND_DISPLAY XAUTHORITY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS
+    XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_DATA_DIRS)
+
+# Roda dentro da sessão gráfica (instalador, jarvis-tela, jarvis-voz).
+salvar_sessao() {
+    local k
+    mkdir -p "$DADOS"
+    (umask 077; : > "$SESSAO")
+    chmod 600 "$SESSAO"
+    for k in "${VARIAVEIS_SESSAO[@]}"; do
+        if [[ -n "${!k:-}" ]]; then printf '%s=%s\n' "$k" "${!k}" >> "$SESSAO"; fi
+    done
+}
+
+carregar_sessao() {
+    if [[ -f "$SESSAO" ]]; then
+        local chave valor k
+        while IFS='=' read -r chave valor; do
+            for k in "${VARIAVEIS_SESSAO[@]}"; do
+                if [[ "$chave" == "$k" && -z "${!chave:-}" ]]; then export "$chave=$valor"; fi
+            done
+        done < "$SESSAO"
+    fi
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+    if [[ -z "${WAYLAND_DISPLAY:-}" && -S "$XDG_RUNTIME_DIR/wayland-0" ]]; then
+        export WAYLAND_DISPLAY=wayland-0
+    fi
+    export DISPLAY="${DISPLAY:-:0}"
+}
+
+falha() { echo "$*"; exit 1; }
+
+precisa() {
+    command -v "$1" >/dev/null 2>&1 || falha "Falta o programa '$1'. Rode o instalador com: bash instalar.sh --controle-pc"
+}
+
+# Mouse e teclado usam o xdotool, que só funciona na sessão Xorg.
+so_xorg() {
+    if [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]]; then
+        falha "Mouse e teclado só funcionam na sessão Xorg. Na tela de login, clique na engrenagem e escolha 'Ubuntu em Xorg'."
+    fi
+    precisa xdotool
+}
+
+# Abre sem prender o Jarvis esperando o programa fechar.
+desanexar() { setsid -f "$@" >/dev/null 2>&1 < /dev/null; }
+
+pastas_de_apps() {
+    printf '%s\n' \
+        "$HOME/.local/share/applications" \
+        /usr/share/applications \
+        /usr/local/share/applications \
+        /var/lib/snapd/desktop/applications \
+        /var/lib/flatpak/exports/share/applications \
+        "$HOME/.local/share/flatpak/exports/share/applications"
+}
+
+# Acha o atalho (.desktop) de um programa pelo nome do arquivo ou pelo nome exibido.
+achar_app() {
+    local termo="${1,,}" dir f base
+    termo="${termo//[^[:alnum:] ._-]/}"
+    [[ -n "$termo" ]] || return 0
+    while IFS= read -r dir; do
+        [[ -d "$dir" ]] || continue
+        for f in "$dir"/*.desktop; do
+            [[ -e "$f" ]] || continue
+            base="$(basename "$f" .desktop)"
+            if [[ "${base,,}" == *"$termo"* ]]; then echo "$f"; return 0; fi
+        done
+    done < <(pastas_de_apps)
+    while IFS= read -r dir; do
+        [[ -d "$dir" ]] || continue
+        f="$(grep -lisE "^Name(\[pt[^]]*\])?=.*${termo}" "$dir"/*.desktop 2>/dev/null | head -n 1)"
+        if [[ -n "$f" ]]; then echo "$f"; return 0; fi
+    done < <(pastas_de_apps)
+}
+
+abrir() {
+    local alvo="$*"
+    [[ -n "$alvo" ]] || falha "Diga o que abrir. Ex.: jarvis-pc abrir firefox"
+    alvo="${alvo/#\~/$HOME}"
+    case "$alvo" in
+        http://*|https://*) ;;
+        www.*|*.com|*.com.br|*.org|*.net|*.io|*.tv|*.br) alvo="https://$alvo" ;;
+    esac
+    if [[ "$alvo" == http://* || "$alvo" == https://* || -e "$alvo" ]]; then
+        precisa xdg-open
+        desanexar xdg-open "$alvo"
+        echo "Abrindo $alvo"
+        return
+    fi
+    local app
+    app="$(achar_app "$alvo")"
+    if [[ -n "$app" ]]; then
+        if gio launch "$app" >/dev/null 2>&1; then
+            echo "Abrindo $(grep -m1 '^Name=' "$app" | cut -d= -f2-)"
+            return
+        fi
+        desanexar gtk-launch "$(basename "$app" .desktop)"
+        echo "Abrindo $alvo"
+        return
+    fi
+    if command -v "$alvo" >/dev/null 2>&1; then
+        desanexar "$alvo"
+        echo "Abrindo $alvo"
+        return
+    fi
+    falha "Não achei o programa '$alvo'."
+}
+
+volume() {
+    local v="${1:-}"
+    local n="${v#[+-]}"
+    if [[ "$v" != "mudo" && ! "$n" =~ ^[0-9]+$ ]]; then
+        falha "Use: volume +10, volume -10, volume 50 ou volume mudo"
+    fi
+    if command -v wpctl >/dev/null 2>&1; then
+        local alvo="@DEFAULT_AUDIO_SINK@"
+        case "$v" in
+            mudo) wpctl set-mute "$alvo" toggle ;;
+            +*) wpctl set-volume -l 1.0 "$alvo" "${n}%+" ;;
+            -*) wpctl set-volume "$alvo" "${n}%-" ;;
+            *) wpctl set-volume -l 1.0 "$alvo" "${n}%" ;;
+        esac || falha "Não consegui mudar o volume."
+        wpctl get-volume "$alvo"
+    elif command -v pactl >/dev/null 2>&1; then
+        local alvo="@DEFAULT_SINK@"
+        case "$v" in
+            mudo) pactl set-sink-mute "$alvo" toggle ;;
+            +*) pactl set-sink-volume "$alvo" "+${n}%" ;;
+            -*) pactl set-sink-volume "$alvo" "-${n}%" ;;
+            *) pactl set-sink-volume "$alvo" "${n}%" ;;
+        esac || falha "Não consegui mudar o volume."
+        pactl get-sink-volume "$alvo" | head -n 1
+    else
+        falha "Não achei o controle de som (wpctl ou pactl)."
+    fi
+}
+
+midia() {
+    local acao
+    case "${1:-}" in
+        tocar) acao=play ;;
+        pausar) acao=pause ;;
+        alternar) acao=play-pause ;;
+        proxima|próxima) acao=next ;;
+        anterior) acao=previous ;;
+        *) falha "Use: midia tocar, pausar, alternar, proxima ou anterior" ;;
+    esac
+    precisa playerctl
+    playerctl "$acao" 2>/dev/null || falha "Nenhum player de música ou vídeo aberto."
+    echo "Ok: $1"
+}
+
+# Traduz nomes comuns de teclas para os nomes do xdotool.
+tecla() {
+    local t="${1,,}"
+    case "$t" in
+        ctrl|control) echo ctrl ;;
+        alt) echo alt ;;
+        shift) echo shift ;;
+        super|win|windows|meta) echo super ;;
+        enter|return) echo Return ;;
+        esc|escape) echo Escape ;;
+        tab) echo Tab ;;
+        space|espaço|espaco) echo space ;;
+        backspace|apagar) echo BackSpace ;;
+        delete|del) echo Delete ;;
+        up|cima) echo Up ;;
+        down|baixo) echo Down ;;
+        left|esquerda) echo Left ;;
+        right|direita) echo Right ;;
+        home|inicio|início) echo Home ;;
+        end|fim) echo End ;;
+        pageup) echo Prior ;;
+        pagedown) echo Next ;;
+        f[0-9]|f1[0-2]) echo "F${t#f}" ;;
+        ?) echo "$t" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+teclas() {
+    so_xorg
+    [[ -n "${1:-}" ]] || falha "Diga o atalho. Ex.: jarvis-pc teclas ctrl+t"
+    local partes combo="" p
+    IFS='+' read -ra partes <<< "$*"
+    for p in "${partes[@]}"; do
+        p="${p// /}"
+        [[ -n "$p" ]] || continue
+        combo+="${combo:++}$(tecla "$p")"
+    done
+    xdotool key --clearmodifiers "$combo" || falha "Não consegui apertar $combo."
+    echo "Apertei $combo"
+}
+
+digitar() {
+    so_xorg
+    [[ -n "$*" ]] || falha "Diga o texto. Ex.: jarvis-pc digitar \"olá\""
+    xdotool type --delay 15 -- "$*" || falha "Não consegui digitar."
+    echo "Digitei o texto."
+}
+
+mouse() {
+    so_xorg
+    [[ "${1:-}" =~ ^[0-9]+$ && "${2:-}" =~ ^[0-9]+$ ]] || falha "Use: jarvis-pc mouse <x> <y>"
+    xdotool mousemove "$1" "$2" || falha "Não consegui mover o mouse."
+    echo "Mouse em $1, $2"
+}
+
+clicar() {
+    so_xorg
+    case "${1:-esquerdo}" in
+        esquerdo) xdotool click 1 ;;
+        direito) xdotool click 3 ;;
+        meio) xdotool click 2 ;;
+        duplo) xdotool click --repeat 2 --delay 120 1 ;;
+        *) falha "Use: clicar, clicar direito, clicar meio ou clicar duplo" ;;
+    esac || falha "Não consegui clicar."
+    echo "Cliquei (${1:-esquerdo})"
+}
+
+rolar() {
+    so_xorg
+    local vezes="${2:-5}" botao
+    [[ "$vezes" =~ ^[0-9]+$ ]] || vezes=5
+    case "${1:-}" in
+        cima) botao=4 ;;
+        baixo) botao=5 ;;
+        *) falha "Use: rolar cima ou rolar baixo" ;;
+    esac
+    xdotool click --repeat "$vezes" --delay 30 "$botao" || falha "Não consegui rolar."
+    echo "Rolei para $1"
+}
+
+tela() {
+    so_xorg
+    local tamanho pos
+    tamanho="$(xdotool getdisplaygeometry)" || falha "Não consegui ler a tela."
+    pos="$(xdotool getmouselocation --shell | grep -E '^[XY]=' | tr '\n' ' ')"
+    echo "Tela: ${tamanho/ /x} · Mouse: $pos"
+}
+
+janelas() {
+    precisa wmctrl
+    wmctrl -l 2>/dev/null | awk '{ $1=$2=$3=""; sub(/^ +/, ""); print }' || falha "Não consegui listar as janelas."
+}
+
+focar() {
+    precisa wmctrl
+    [[ -n "$*" ]] || falha "Diga o nome da janela."
+    wmctrl -a "$*" 2>/dev/null || falha "Não achei a janela '$*'."
+    echo "Janela '$*' na frente."
+}
+
+bloquear() {
+    if loginctl lock-session 2>/dev/null; then echo "Tela bloqueada."; return; fi
+    if dbus-send --session --type=method_call --dest=org.gnome.ScreenSaver \
+        /org/gnome/ScreenSaver org.gnome.ScreenSaver.Lock 2>/dev/null; then
+        echo "Tela bloqueada."
+        return
+    fi
+    falha "Não consegui bloquear a tela."
+}
+
+cancelar_desligamento() {
+    if [[ -f "$PID_DESLIGAR" ]]; then
+        local pid
+        pid="$(cat "$PID_DESLIGAR")"
+        # O agendamento roda num grupo de processos próprio; mata o grupo todo.
+        kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null
+        rm -f "$PID_DESLIGAR"
+        echo "Desligamento cancelado."
+    else
+        echo "Não há desligamento agendado."
+    fi
+}
+
+desligar() {
+    local quando="${1:-}"
+    if [[ "$quando" == "agora" ]]; then
+        echo "Desligando o PC."
+        systemctl poweroff
+        return
+    fi
+    [[ "$quando" =~ ^[0-9]+$ ]] || falha "Use: desligar agora ou desligar <minutos>"
+    cancelar_desligamento >/dev/null
+    mkdir -p "$DADOS"
+    # shellcheck disable=SC2016 # $$, $1 e $2 são do sh de dentro
+    setsid -f sh -c 'echo $$ > "$1"; sleep "$2"; rm -f "$1"; systemctl poweroff' \
+        sh "$PID_DESLIGAR" "$((quando * 60))" >/dev/null 2>&1 < /dev/null
+    if [[ "$quando" -eq 1 ]]; then echo "O PC vai desligar em 1 minuto."; else echo "O PC vai desligar em $quando minutos."; fi
+}
+
+# Salva antes de carregar os valores padrão, para guardar só a sessão real.
+if [[ "${1:-}" == "salvar-sessao" ]]; then
+    salvar_sessao
+    exit 0
+fi
+
+carregar_sessao
+
+acao="${1:-}"
+shift || true
+case "$acao" in
+    abrir) abrir "$@" ;;
+    volume) volume "$@" ;;
+    midia|mídia) midia "$@" ;;
+    teclas|tecla|atalho) teclas "$@" ;;
+    digitar|escrever) digitar "$@" ;;
+    mouse) mouse "$@" ;;
+    clicar) clicar "$@" ;;
+    rolar) rolar "$@" ;;
+    tela) tela ;;
+    janelas) janelas ;;
+    focar) focar "$@" ;;
+    bloquear) bloquear ;;
+    desligar) desligar "$@" ;;
+    cancelar-desligamento) cancelar_desligamento ;;
+    ""|-h|--ajuda|ajuda|--help) uso ;;
+    *) echo "Ação desconhecida: $acao"; uso; exit 2 ;;
+esac
