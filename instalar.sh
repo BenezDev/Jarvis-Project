@@ -198,10 +198,54 @@ EOF
 
         local tela="$HOME/.local/share/jarvis-project/tela"
         mkdir -p "$tela"
-        cp "$REPO_DIR/tela/index.html" "$tela/index.html"
+        cp "$REPO_DIR/tela/index.html" "$REPO_DIR/tela/jarvis.svg" "$tela/"
         install -m 755 "$REPO_DIR/bin/jarvis-tela" "$HOME/.local/bin/jarvis-tela"
         ok "tela do Jarvis instalada (comando 'jarvis-tela')"
+
+        criar_botao "$tela/jarvis.svg"
     fi
+}
+
+# Botão "Jarvis" no menu de aplicativos e na área de trabalho.
+criar_botao() {
+    local icone="$1"
+    local menu="$HOME/.local/share/applications/jarvis.desktop"
+    mkdir -p "$(dirname "$menu")"
+    cat > "$menu" <<EOF
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Jarvis
+Comment=Abre a tela do Jarvis e conversa por voz
+Exec="$HOME/.local/bin/jarvis-tela"
+Icon=$icone
+Terminal=true
+Categories=Utility;
+StartupNotify=false
+EOF
+    chmod 755 "$menu"
+    ok "Jarvis adicionado ao menu de aplicativos"
+
+    # xdg-user-dir devolve a própria home quando não há área de trabalho.
+    local area=""
+    if command -v xdg-user-dir >/dev/null 2>&1; then
+        area="$(xdg-user-dir DESKTOP 2>/dev/null || true)"
+    fi
+    if [[ -z "$area" || "$area" == "$HOME" || ! -d "$area" ]]; then
+        area=""
+        local d
+        for d in "$HOME/Área de Trabalho" "$HOME/Desktop"; do
+            if [[ -d "$d" ]]; then area="$d"; break; fi
+        done
+    fi
+    if [[ -z "$area" ]]; then
+        aviso "não achei a área de trabalho; o Jarvis ficou só no menu de aplicativos"
+        return 0
+    fi
+    install -m 755 "$menu" "$area/jarvis.desktop"
+    # No Ubuntu, isso deixa abrir com dois cliques sem "Permitir execução".
+    gio set "$area/jarvis.desktop" metadata::trusted true 2>/dev/null || true
+    ok "botão 'Jarvis' criado na área de trabalho"
 }
 
 resumo_voz="desligada"
@@ -245,7 +289,7 @@ esac
 echo "Para conversar por texto:  jarvis"
 if [[ "$COM_VOZ" -eq 1 ]]; then
     echo "Para conversar por voz:    jarvis-voz   (aperte Enter e fale)"
-    echo "Para ver o Jarvis na tela: jarvis-tela  (abre no navegador)"
+    echo "Para ver o Jarvis na tela: jarvis-tela  (ou o botão 'Jarvis' na área de trabalho)"
 fi
 echo "Para ver se está tudo ok:  jarvis doctor"
 echo
