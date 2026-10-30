@@ -27,9 +27,8 @@ Uso: bash instalar.sh [opções]
 
   --sem-voz        não instala microfone/voz (instalação bem menor)
   --controle-pc    dá ao Jarvis acesso total ao PC: comandos, arquivos,
-                   programas, som, teclado e mouse. Na tela (jarvis-tela)
-                   ele age sem pedir confirmação; no 'jarvis' do terminal
-                   ele pergunta antes de cada comando.
+                   programas, som, teclado e mouse. Ele age sem pedir
+                   confirmação (na tela e no terminal).
   --voz <id>       voz do Jarvis: pm_alex (padrão), pm_santa ou pf_dora
   -h, --ajuda      mostra esta ajuda
 EOF
@@ -166,12 +165,17 @@ instalar_extras() {
 # ---- 4. configuração do Jarvis ----
 configurar() {
     local tools="web_search,memory_manage,think,calculator"
+    local servidores=""
     if [[ "$CONTROLE_PC" -eq 1 ]]; then
-        tools="$tools,shell_exec,file_read,file_write"
+        # Comandos e arquivos vêm do jarvis-mcp: o shell_exec do OpenJarvis
+        # pede confirmação e por isso sempre falha na tela (jarvis serve).
+        tools="$tools,executar_comando,ler_arquivo,escrever_arquivo"
+        servidores="[{\"name\": \"jarvis-pc\", \"command\": \"$HOME/.local/bin/jarvis-mcp\"}]"
     fi
     # O agente "simple" não usa ferramentas; o "orchestrator" usa.
     "$JARVIS_BIN" config set agent.default_agent orchestrator
     "$JARVIS_BIN" config set tools.enabled "$tools"
+    "$JARVIS_BIN" config set tools.mcp.servers "$servidores"
     if [[ "$COM_VOZ" -eq 1 ]]; then
         "$JARVIS_BIN" config set speech.language pt
         "$JARVIS_BIN" config set speech.tts_backend kokoro
@@ -204,6 +208,7 @@ personalizar() {
     if [[ "$CONTROLE_PC" -eq 1 ]]; then
         mkdir -p "$HOME/.local/bin"
         install -m 755 "$REPO_DIR/bin/jarvis-pc" "$HOME/.local/bin/jarvis-pc"
+        install -m 755 "$REPO_DIR/bin/jarvis-mcp" "$HOME/.local/bin/jarvis-mcp"
         "$HOME/.local/bin/jarvis-pc" salvar-sessao
         ok "controle do PC instalado (comando 'jarvis-pc')"
     fi
@@ -239,7 +244,7 @@ criar_botao() {
 Type=Application
 Version=1.0
 Name=Jarvis
-Comment=Abre a tela do Jarvis e conversa por voz
+Comment=Liga o Jarvis (IA, servidor e tela) e conversa por voz
 Exec="$HOME/.local/bin/jarvis-tela"
 Icon=$icone
 Terminal=true
@@ -257,7 +262,7 @@ EOF
     if [[ -z "$area" || "$area" == "$HOME" || ! -d "$area" ]]; then
         area=""
         local d
-        for d in "$HOME/Área de Trabalho" "$HOME/Desktop"; do
+        for d in "$HOME/Área de Trabalho" "$HOME/Área de trabalho" "$HOME/Desktop"; do
             if [[ -d "$d" ]]; then area="$d"; break; fi
         done
     fi

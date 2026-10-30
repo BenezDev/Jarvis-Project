@@ -96,7 +96,7 @@ Dê dois cliques no botão **Jarvis** da área de trabalho (ele também fica no 
 jarvis-tela
 ```
 
-Isso liga o servidor do Jarvis e abre a tela no navegador (`http://localhost:3000`). Na primeira vez demora alguns minutos e o navegador pede para usar o microfone: clique em **Permitir**.
+Isso liga tudo de uma vez: a IA (Ollama), o servidor do Jarvis (porta `8765`) e a tela no navegador (`http://localhost:3000`). Se você clicar de novo com ele já ligado, ele só reabre a tela. Na primeira vez demora alguns minutos e o navegador pede para usar o microfone: clique em **Permitir**.
 
 * **Falar:** toque no núcleo (ou aperte `Espaço`) e fale. Quando você fica em silêncio, ele entende, pensa e responde falando.
 * **Conversa:** com o botão `CONVERSA` ligado, depois de responder ele volta a ouvir sozinho. Aperte `Esc` para parar.
@@ -118,11 +118,11 @@ Instale com `bash instalar.sh --controle-pc` para o Jarvis poder:
 * apertar atalhos, digitar textos, mover o mouse, clicar e rolar ("abre uma nova aba", "digita meu e-mail");
 * trocar de janela, bloquear a tela e desligar o PC ("desliga o PC em 30 minutos").
 
-Por trás disso fica o comando `jarvis-pc` (rode `jarvis-pc ajuda` para ver tudo). Você também pode usá-lo direto no terminal.
+Por trás disso ficam dois comandos: o `jarvis-mcp`, que dá ao Jarvis as ferramentas `executar_comando`, `ler_arquivo` e `escrever_arquivo`, e o `jarvis-pc` (rode `jarvis-pc ajuda` para ver tudo), que ele usa para programas, som, teclado e mouse. Você também pode usar o `jarvis-pc` direto no terminal.
 
 O que saber antes:
 
-* **Confirmação:** na tela (`jarvis-tela` ou o botão) o Jarvis age **sem pedir confirmação**. No `jarvis` do terminal ele pergunta antes de cada comando. A personalidade dele manda confirmar antes de apagar arquivos ou desligar o PC, mas um modelo pequeno pode errar: o `qwen3.5:4b` ou o `qwen3.5:9b` erram bem menos que o `2b`.
+* **Confirmação:** o Jarvis age **sem pedir confirmação**, na tela e no terminal. A personalidade dele manda confirmar antes de apagar arquivos ou desligar o PC, mas um modelo pequeno pode errar ou até inventar o resultado de um comando: o `qwen3.5:4b` ou o `qwen3.5:9b` erram bem menos que o `2b`.
 * **Golpes em páginas da web:** um site pode tentar mandar o Jarvis rodar comandos. Ele foi instruído a só obedecer você, mas isso não é garantido.
 * **Ele não enxerga a tela.** Atalhos e "abre tal programa" funcionam bem; para clicar num lugar específico, ele precisa que você diga a posição.
 * **Teclado e mouse só funcionam na sessão Xorg.** Se você usa Wayland (padrão do Ubuntu novo), saia da conta e, na tela de login, clique na engrenagem e escolha **Ubuntu em Xorg**. Abrir programas, volume e música funcionam nas duas.
@@ -177,6 +177,7 @@ jarvis config set intelligence.default_model qwen3.5:9b
 * **O microfone não funciona**: confira se o microfone aparece em `arecord -l` (pacote `alsa-utils`). No WSL2, use o Windows 11 atualizado e libere o microfone em Configurações > Privacidade > Microfone.
 * **A voz não fala**: rode `bash instalar.sh` de novo para reinstalar o `espeak-ng` e as bibliotecas de voz.
 * **A tela mostra "SERVIDOR DESLIGADO"**: rode `jarvis-tela` no terminal e deixe ele aberto. Se o servidor parar com erro, o motivo fica em `~/.openjarvis/jarvis-tela.log`.
+* **"A porta 8765 está ocupada"**: outro programa usa a porta do Jarvis. Escolha outra: `JARVIS_PORTA=8766 jarvis-tela`.
 
 ## Atualizar
 
@@ -194,7 +195,7 @@ Se você instalou com opções (como `--controle-pc` ou `--voz pf_dora`), passe 
 
 ```bash
 jarvis-uninstall
-rm -f ~/.local/bin/jarvis-voz ~/.local/bin/jarvis-tela ~/.local/bin/jarvis-pc
+rm -f ~/.local/bin/jarvis-voz ~/.local/bin/jarvis-tela ~/.local/bin/jarvis-pc ~/.local/bin/jarvis-mcp
 rm -rf ~/.local/share/jarvis-project
 rm -f ~/.local/share/applications/jarvis.desktop ~/Área\ de\ Trabalho/jarvis.desktop ~/Desktop/jarvis.desktop
 ```
