@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""jarvis-mcp — dá ao Jarvis acesso total ao PC: comandos e arquivos.
+
+Servidor MCP (stdio) que o OpenJarvis carrega pelo config.toml
+(tools.mcp.servers). Existe porque o shell_exec do próprio OpenJarvis pede
+confirmação, e no servidor da tela (jarvis serve) não há quem confirme: ele
+sempre falhava. As ferramentas daqui rodam direto, sem perguntar.
+"""
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ESPERA_COMANDO = 60  # segundos; depois disso o comando segue em segundo plano
+LIMITE_TEXTO = 20000  # caracteres devolvidos ao modelo
+
+FERRAMENTAS = [
+    {
+        "name": "executar_comando",
+        "description": (
+            "Roda um comando bash neste computador, com acesso total aos "
+            "arquivos e programas do usuário. Para abrir programas, mudar o "
+            "volume, usar teclado, mouse e janelas, use o comando jarvis-pc "
+            "(ex.: jarvis-pc abrir firefox)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "comando": {"type": "string", "description": "O comando bash."},
+                "pasta": {
+                    "type": "string",
+                    "description": "Pasta onde rodar (padrão: a pasta pessoal).",
+                },
+            },
+            "required": ["comando"],
+        },
+    },
+    {
+        "name": "ler_arquivo",
+        "description": "Lê um arquivo de texto, ou lista o que tem numa pasta.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "caminho": {"type": "string", "description": "Ex.: ~/Documentos/notas.txt"},
+            },
+            "required": ["caminho"],
+        },
+    },
+    {
+        "name": "escrever_arquivo",
+        "description": "Cria um arquivo de texto ou substitui o conteúdo dele.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "caminho": {"type": "string", "description": "Ex.: ~/Documentos/lista.txt"},
+                "conteudo": {"type": "string", "description": "O texto do arquivo."},
+            },
+            "required": ["caminho", "conteudo"],
+        },
+    },
+]
+
+
+def cortar(texto):
+    if len(texto) > LIMITE_TEXTO:
+        return texto[:LIMITE_TEXTO] + "\n[... saída cortada]"
+    return texto
+
+
+def caminho(bruto):
+    return Path(os.path.expanduser(str(bruto))).resolve()
+
+
+def executar_comando(comando, pasta="~"):
+    # A saída vai para um arquivo, e não para um pipe: assim um programa
+    # aberto em segundo plano (firefox &) não prende o Jarvis esperando.
+    with tempfile.TemporaryFile(mode="w+") as saida:
+        proc = subprocess.Popen(
+            ["bash", "-c", comando],
+            cwd=caminho(pasta or "~"),
+            stdin=subprocess.DEVNULL,
+            stdout=saida,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            text=True,
+        )
+        try:
+            codigo = proc.wait(timeout=ESPERA_COMANDO)
+        except subprocess.TimeoutExpired:
+            codigo = None
+        saida.seek(0)
+        texto = saida.read()
+    if codigo is None:
+        rodape = f"[o comando continua rodando em segundo plano, PID {proc.pid}]"
+    else:
+        rodape = f"[código de saída: {codigo}]"
+    return cortar(f"{texto.rstrip()}\n{rodape}".lstrip()), codigo not in (None, 0)
+
+
+def ler_arquivo(caminho_):
+    alvo = caminho(caminho_)
+    if alvo.is_dir():
+        nomes = sorted(p.name + ("/" if p.is_dir() else "") for p in alvo.iterdir())
+        return cortar("\n".join(nomes) or "(pasta vazia)"), False
+    return cortar(alvo.read_text(errors="replace")), False
+
+
+def escrever_arquivo(caminho_, conteudo):
+    alvo = caminho(caminho_)
+    alvo.parent.mkdir(parents=True, exist_ok=True)
+    alvo.write_text(conteudo)
+    return f"Salvei {len(conteudo)} caracteres em {alvo}", False
+
+
+ACOES = {
+    "executar_comando": lambda a: executar_comando(a["comando"], a.get("pasta")),
+    "ler_arquivo": lambda a: ler_arquivo(a["caminho"]),
+    "escrever_arquivo": lambda a: escrever_arquivo(a["caminho"], a["conteudo"]),
+}
+
+
+def chamar(params):
+    acao = ACOES.get(params.get("name"))
+    if acao is None:
+        texto, erro = f"Ferramenta desconhecida: {params.get('name')}", True
+    else:
+        try:
+            texto, erro = acao(params.get("arguments") or {})
+        except KeyError as exc:
+            texto, erro = f"Falta o argumento {exc}", True
+        except Exception as exc:  # o erro volta para o modelo, não derruba o servidor
+            texto, erro = f"Erro: {exc}", True
+    return {"content": [{"type": "text", "text": texto}], "isError": erro}
+
+
+def responder(pedido):
+    metodo = pedido.get("method")
+    params = pedido.get("params") or {}
+    if metodo == "initialize":
+        return {
+            "protocolVersion": params.get("protocolVersion", "2025-03-26"),
+            "capabilities": {"tools": {}},
+            "serverInfo": {"name": "jarvis-pc", "version": "1.0"},
+        }
+    if metodo == "tools/list":
+        return {"tools": FERRAMENTAS}
+    if metodo == "tools/call":
+        return chamar(params)
+    if metodo == "ping":
+        return {}
+    raise LookupError(metodo)
+
+
+def main():
+    # Garante o jarvis-pc no PATH mesmo quando aberto sem o ~/.bashrc.
+    local_bin = os.path.expanduser("~/.local/bin")
+    if local_bin not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = local_bin + os.pathsep + os.environ.get("PATH", "")
+
+    for linha in sys.stdin:
+        try:
+            pedido = json.loads(linha)
+        except json.JSONDecodeError:
+            continue
+        if "id" not in pedido:  # notificação: não tem resposta
+            continue
+        resposta = {"jsonrpc": "2.0", "id": pedido["id"]}
+        try:
+            resposta["result"] = responder(pedido)
+        except LookupError:
+            resposta["error"] = {"code": -32601, "message": f"método desconhecido: {pedido.get('method')}"}
+        sys.stdout.write(json.dumps(resposta, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+
+
+if __name__ == "__main__":
+    main()
