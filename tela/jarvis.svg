@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="fundo" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#0b3350"/>
+      <stop offset="1" stop-color="#02060c"/>
+    </radialGradient>
+    <radialGradient id="nucleo" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.35" stop-color="#a6ecff"/>
+      <stop offset="0.7" stop-color="#5fd4ff" stop-opacity="0.65"/>
+      <stop offset="1" stop-color="#5fd4ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="128" r="124" fill="url(#fundo)" stroke="#5fd4ff" stroke-opacity="0.55" stroke-width="3"/>
+  <circle cx="128" cy="128" r="106" fill="none" stroke="#5fd4ff" stroke-opacity="0.45" stroke-width="7" stroke-dasharray="2.6 8.5"/>
+  <circle cx="128" cy="128" r="88" fill="none" stroke="#5fd4ff" stroke-opacity="0.6" stroke-width="7" stroke-dasharray="30 16.07" transform="rotate(-80 128 128)"/>
+  <circle cx="128" cy="128" r="74" fill="none" stroke="#5fd4ff" stroke-opacity="0.8" stroke-width="2"/>
+  <circle cx="128" cy="128" r="62" fill="none" stroke="#5fd4ff" stroke-width="14" stroke-dasharray="27 11.96" transform="rotate(-84 128 128)"/>
+  <circle cx="128" cy="128" r="54" fill="url(#nucleo)"/>
+</svg>

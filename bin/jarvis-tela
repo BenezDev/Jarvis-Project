@@ -21,7 +21,8 @@ desligar() {
     done
 }
 trap desligar EXIT
-trap 'echo; echo "Jarvis desligado."; exit 0' INT TERM
+# HUP: fechar a janela do terminal também desliga tudo.
+trap 'echo; echo "Jarvis desligado."; exit 0' INT TERM HUP
 
 if [[ ! -f "$TELA_DIR/index.html" ]]; then
     echo "Não achei a tela do Jarvis em $TELA_DIR." >&2
@@ -31,6 +32,27 @@ fi
 
 servidor_ligado() { curl -fs -o /dev/null --max-time 2 "$API/v1/info"; }
 porta_livre() { ! (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+abrir_navegador() {
+    if command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$1" >/dev/null 2>&1 &
+    elif command -v wslview >/dev/null 2>&1; then
+        wslview "$1" >/dev/null 2>&1 &
+    fi
+}
+
+# Clicou de novo no botão com tudo já ligado: só abre a tela.
+tela_aberta() {
+    local pagina
+    pagina="$(curl -fs --max-time 2 "http://localhost:3000/" || true)"
+    [[ "$pagina" == *"J.A.R.V.I.S."* ]]
+}
+if servidor_ligado && tela_aberta; then
+    echo "O Jarvis já está ligado. Abrindo a tela..."
+    abrir_navegador "http://localhost:3000/"
+    sleep 1
+    exit 0
+fi
 
 if servidor_ligado; then
     echo "O servidor do Jarvis já está ligado."
@@ -76,14 +98,10 @@ PIDS+=("$!")
 sleep 1
 
 URL="http://localhost:$PORTA/"
-if command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$URL" >/dev/null 2>&1 &
-elif command -v wslview >/dev/null 2>&1; then
-    wslview "$URL" >/dev/null 2>&1 &
-fi
+abrir_navegador "$URL"
 
 echo
 echo "Tela do Jarvis: $URL"
 echo "Se o navegador não abriu, copie o endereço acima."
-echo "Para desligar, aperte Ctrl+C aqui."
+echo "Para desligar, aperte Ctrl+C aqui ou feche esta janela."
 wait

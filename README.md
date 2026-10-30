@@ -51,7 +51,7 @@ Ele vai:
 2. rodar o instalador oficial do OpenJarvis (uv, Python, Ollama e o modelo `qwen3.5:2b`). Ele pergunta se você quer enviar estatísticas de uso: aperte `N` para não enviar.
 3. instalar a pesquisa web e a voz.
 4. configurar o Jarvis para usar as ferramentas, falar português e usar a voz `pm_alex`.
-5. instalar a personalidade do Jarvis (`config/SOUL.md`) e criar os atalhos `jarvis-voz` e `jarvis-tela`.
+5. instalar a personalidade do Jarvis (`config/SOUL.md`), criar os atalhos `jarvis-voz` e `jarvis-tela` e colocar o botão **Jarvis** na área de trabalho e no menu de aplicativos.
 
 **5. Abra um terminal novo** (ou rode `source ~/.bashrc`).
 
@@ -90,11 +90,13 @@ Pode rodar o instalador de novo quando quiser: ele pula o que já está instalad
 
 ### Tela do Jarvis
 
+Dê dois cliques no botão **Jarvis** da área de trabalho (ele também fica no menu de aplicativos), ou rode no terminal:
+
 ```bash
 jarvis-tela
 ```
 
-Liga o servidor do Jarvis e abre a tela no navegador (`http://localhost:3000`). Na primeira vez demora alguns minutos e o navegador pede para usar o microfone: clique em **Permitir**.
+Isso liga o servidor do Jarvis e abre a tela no navegador (`http://localhost:3000`). Na primeira vez demora alguns minutos e o navegador pede para usar o microfone: clique em **Permitir**.
 
 * **Falar:** toque no núcleo (ou aperte `Espaço`) e fale. Quando você fica em silêncio, ele entende, pensa e responde falando.
 * **Conversa:** com o botão `CONVERSA` ligado, depois de responder ele volta a ouvir sozinho. Aperte `Esc` para parar.
@@ -102,7 +104,9 @@ Liga o servidor do Jarvis e abre a tela no navegador (`http://localhost:3000`). 
 * **Mudo:** o botão `MUDO` desliga a voz dele; as respostas continuam aparecendo na tela.
 * O painel da direita mostra se o servidor, a IA, o ouvido (Whisper) e a voz (Kokoro) estão prontos.
 
-Deixe o terminal aberto enquanto usa. Para desligar, aperte `Ctrl` + `C` nele.
+Deixe a janela do terminal aberta enquanto usa. Para desligar o Jarvis, feche essa janela ou aperte `Ctrl` + `C` nela.
+
+Se o botão da área de trabalho abrir como um arquivo de texto, clique nele com o botão direito e escolha **Permitir execução**.
 
 ### Memória persistente
 
@@ -168,6 +172,7 @@ bash instalar.sh
 jarvis-uninstall
 rm -f ~/.local/bin/jarvis-voz ~/.local/bin/jarvis-tela
 rm -rf ~/.local/share/jarvis-project
+rm -f ~/.local/share/applications/jarvis.desktop ~/Área\ de\ Trabalho/jarvis.desktop ~/Desktop/jarvis.desktop
 ```
 
 O `jarvis-uninstall` apaga o OpenJarvis e os dados dele (`~/.openjarvis`), mas não remove o Ollama nem o `uv`.
