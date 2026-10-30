@@ -11,7 +11,7 @@ Versão 1.2
 * comando de voz (fala com o microfone, o Jarvis responde falando)
 * tela estilo filme: um núcleo brilhante que reage quando ele ouve e fala
 * voz grátis em português (Kokoro, roda local)
-* opcional: o Jarvis roda comandos no seu PC (sempre pede confirmação)
+* opcional: acesso total ao PC (comandos, arquivos, programas, som, teclado e mouse)
 
 ## O que você precisa
 
@@ -70,7 +70,7 @@ Na primeira vez, o Jarvis ainda pode estar baixando modelos. Rode `jarvis doctor
 | Opção | O que faz |
 |---|---|
 | `bash instalar.sh --sem-voz` | instala sem microfone e voz (bem menor) |
-| `bash instalar.sh --controle-pc` | deixa o Jarvis rodar comandos no PC, sempre com confirmação |
+| `bash instalar.sh --controle-pc` | dá ao Jarvis acesso total ao PC (veja [Controle do PC](#controle-do-pc)) |
 | `bash instalar.sh --voz pf_dora` | escolhe a voz (`pm_alex`, `pm_santa` ou `pf_dora`) |
 
 Pode rodar o instalador de novo quando quiser: ele pula o que já está instalado.
@@ -107,6 +107,28 @@ Isso liga o servidor do Jarvis e abre a tela no navegador (`http://localhost:300
 Deixe a janela do terminal aberta enquanto usa. Para desligar o Jarvis, feche essa janela ou aperte `Ctrl` + `C` nela.
 
 Se o botão da área de trabalho abrir como um arquivo de texto, clique nele com o botão direito e escolha **Permitir execução**.
+
+### Controle do PC
+
+Instale com `bash instalar.sh --controle-pc` para o Jarvis poder:
+
+* rodar qualquer comando e ler e escrever qualquer arquivo seu;
+* abrir programas, sites e pastas ("abre o Spotify", "abre o YouTube");
+* mudar o volume e controlar música e vídeo ("aumenta o volume", "pausa a música");
+* apertar atalhos, digitar textos, mover o mouse, clicar e rolar ("abre uma nova aba", "digita meu e-mail");
+* trocar de janela, bloquear a tela e desligar o PC ("desliga o PC em 30 minutos").
+
+Por trás disso fica o comando `jarvis-pc` (rode `jarvis-pc ajuda` para ver tudo). Você também pode usá-lo direto no terminal.
+
+O que saber antes:
+
+* **Confirmação:** na tela (`jarvis-tela` ou o botão) o Jarvis age **sem pedir confirmação**. No `jarvis` do terminal ele pergunta antes de cada comando. A personalidade dele manda confirmar antes de apagar arquivos ou desligar o PC, mas um modelo pequeno pode errar: o `qwen3.5:4b` ou o `qwen3.5:9b` erram bem menos que o `2b`.
+* **Golpes em páginas da web:** um site pode tentar mandar o Jarvis rodar comandos. Ele foi instruído a só obedecer você, mas isso não é garantido.
+* **Ele não enxerga a tela.** Atalhos e "abre tal programa" funcionam bem; para clicar num lugar específico, ele precisa que você diga a posição.
+* **Teclado e mouse só funcionam na sessão Xorg.** Se você usa Wayland (padrão do Ubuntu novo), saia da conta e, na tela de login, clique na engrenagem e escolha **Ubuntu em Xorg**. Abrir programas, volume e música funcionam nas duas.
+* **Sem `sudo`:** comandos de administrador precisam de senha, então ele passa esses para você rodar.
+
+Para tirar o acesso total, rode `bash instalar.sh` sem o `--controle-pc`.
 
 ### Memória persistente
 
@@ -166,11 +188,13 @@ git pull
 bash instalar.sh
 ```
 
+Se você instalou com opções (como `--controle-pc` ou `--voz pf_dora`), passe as mesmas opções de novo.
+
 ## Desinstalar
 
 ```bash
 jarvis-uninstall
-rm -f ~/.local/bin/jarvis-voz ~/.local/bin/jarvis-tela
+rm -f ~/.local/bin/jarvis-voz ~/.local/bin/jarvis-tela ~/.local/bin/jarvis-pc
 rm -rf ~/.local/share/jarvis-project
 rm -f ~/.local/share/applications/jarvis.desktop ~/Área\ de\ Trabalho/jarvis.desktop ~/Desktop/jarvis.desktop
 ```

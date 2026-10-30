@@ -26,8 +26,10 @@ uso() {
 Uso: bash instalar.sh [opções]
 
   --sem-voz        não instala microfone/voz (instalação bem menor)
-  --controle-pc    deixa o Jarvis rodar comandos no seu PC
-                   (ele sempre pede confirmação antes de cada comando)
+  --controle-pc    dá ao Jarvis acesso total ao PC: comandos, arquivos,
+                   programas, som, teclado e mouse. Na tela (jarvis-tela)
+                   ele age sem pedir confirmação; no 'jarvis' do terminal
+                   ele pergunta antes de cada comando.
   --voz <id>       voz do Jarvis: pm_alex (padrão), pm_santa ou pf_dora
   -h, --ajuda      mostra esta ajuda
 EOF
@@ -84,6 +86,12 @@ pacotes_sistema() {
         local libs
         libs="$( { ldconfig -p || /sbin/ldconfig -p; } 2>/dev/null || true)"
         [[ "$libs" == *libportaudio.so* ]] || faltando+=(portaudio)
+    fi
+    if [[ "$CONTROLE_PC" -eq 1 ]]; then
+        # teclado/mouse, janelas e música (usados pelo jarvis-pc)
+        command -v xdotool >/dev/null 2>&1 || faltando+=(xdotool)
+        command -v wmctrl >/dev/null 2>&1 || faltando+=(wmctrl)
+        command -v playerctl >/dev/null 2>&1 || faltando+=(playerctl)
     fi
 
     if [[ ${#faltando[@]} -eq 0 ]]; then
@@ -159,7 +167,7 @@ instalar_extras() {
 configurar() {
     local tools="web_search,memory_manage,think,calculator"
     if [[ "$CONTROLE_PC" -eq 1 ]]; then
-        tools="$tools,shell_exec"
+        tools="$tools,shell_exec,file_read,file_write"
     fi
     # O agente "simple" não usa ferramentas; o "orchestrator" usa.
     "$JARVIS_BIN" config set agent.default_agent orchestrator
@@ -177,20 +185,35 @@ personalizar() {
     config_dir="$("$VENV_PY" -c 'from openjarvis.core.paths import get_config_dir; print(get_config_dir())')"
     soul="$config_dir/SOUL.md"
     mkdir -p "$config_dir"
-    if [[ -f "$soul" ]] && ! cmp -s "$REPO_DIR/config/SOUL.md" "$soul"; then
+    local nova_soul
+    nova_soul="$(mktemp)"
+    cat "$REPO_DIR/config/SOUL.md" > "$nova_soul"
+    if [[ "$CONTROLE_PC" -eq 1 ]]; then
+        cat "$REPO_DIR/config/SOUL-controle-pc.md" >> "$nova_soul"
+    fi
+    if [[ -f "$soul" ]] && ! cmp -s "$nova_soul" "$soul"; then
         local backup
         backup="$soul.bak.$(date +%Y%m%d%H%M%S)"
         cp "$soul" "$backup"
         ok "SOUL.md antigo guardado em $backup"
     fi
-    cp "$REPO_DIR/config/SOUL.md" "$soul"
+    cp "$nova_soul" "$soul"
+    rm -f "$nova_soul"
     ok "personalidade do Jarvis instalada em $soul"
+
+    if [[ "$CONTROLE_PC" -eq 1 ]]; then
+        mkdir -p "$HOME/.local/bin"
+        install -m 755 "$REPO_DIR/bin/jarvis-pc" "$HOME/.local/bin/jarvis-pc"
+        "$HOME/.local/bin/jarvis-pc" salvar-sessao
+        ok "controle do PC instalado (comando 'jarvis-pc')"
+    fi
 
     if [[ "$COM_VOZ" -eq 1 ]]; then
         mkdir -p "$HOME/.local/bin"
         cat > "$HOME/.local/bin/jarvis-voz" <<'EOF'
 #!/usr/bin/env bash
 # jarvis-voz — conversa com o Jarvis por voz (instalado pelo Jarvis-Project).
+if [[ -x "$HOME/.local/bin/jarvis-pc" ]]; then "$HOME/.local/bin/jarvis-pc" salvar-sessao; fi
 exec "$HOME/.local/bin/jarvis" chat --voice "$@"
 EOF
         chmod +x "$HOME/.local/bin/jarvis-voz"
@@ -251,7 +274,7 @@ EOF
 resumo_voz="desligada"
 [[ "$COM_VOZ" -eq 1 ]] && resumo_voz="$VOZ"
 resumo_pc="desligado"
-[[ "$CONTROLE_PC" -eq 1 ]] && resumo_pc="ligado (com confirmação)"
+[[ "$CONTROLE_PC" -eq 1 ]] && resumo_pc="acesso total"
 
 echo "Instalador do Jarvis"
 echo "  pasta do OpenJarvis: $OPENJARVIS_HOME"
@@ -297,4 +320,13 @@ echo "O modelo de IA ainda pode estar baixando em segundo plano;"
 echo "o 'jarvis doctor' mostra o andamento."
 if [[ "$COM_VOZ" -eq 1 ]]; then
     echo "Na primeira conversa por voz, o Jarvis baixa os modelos de voz (uns minutos)."
+fi
+if [[ "$CONTROLE_PC" -eq 1 ]]; then
+    echo
+    echo "Controle do PC ligado: o Jarvis pode rodar comandos, mexer em arquivos,"
+    echo "abrir programas, mudar o volume e usar teclado e mouse."
+    if [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]]; then
+        aviso "você está na sessão Wayland, onde o teclado e o mouse do Jarvis não funcionam."
+        aviso "Para eles funcionarem, saia da conta e, na tela de login, clique na engrenagem e escolha 'Ubuntu em Xorg'."
+    fi
 fi
