@@ -195,6 +195,12 @@ exec "$HOME/.local/bin/jarvis" chat --voice "$@"
 EOF
         chmod +x "$HOME/.local/bin/jarvis-voz"
         ok "atalho 'jarvis-voz' criado"
+
+        local tela="$HOME/.local/share/jarvis-project/tela"
+        mkdir -p "$tela"
+        cp "$REPO_DIR/tela/index.html" "$tela/index.html"
+        install -m 755 "$REPO_DIR/bin/jarvis-tela" "$HOME/.local/bin/jarvis-tela"
+        ok "tela do Jarvis instalada (comando 'jarvis-tela')"
     fi
 }
 
@@ -220,7 +226,7 @@ instalar_extras
 passo "4/5 Configurando o Jarvis"
 configurar
 
-passo "5/5 Personalidade do Jarvis"
+passo "5/5 Personalidade, voz e tela do Jarvis"
 personalizar
 
 printf '\n\033[1;32mPronto! O Jarvis está instalado.\033[0m\n\n'
@@ -239,6 +245,7 @@ esac
 echo "Para conversar por texto:  jarvis"
 if [[ "$COM_VOZ" -eq 1 ]]; then
     echo "Para conversar por voz:    jarvis-voz   (aperte Enter e fale)"
+    echo "Para ver o Jarvis na tela: jarvis-tela  (abre no navegador)"
 fi
 echo "Para ver se está tudo ok:  jarvis doctor"
 echo

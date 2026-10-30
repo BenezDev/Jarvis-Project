@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# jarvis-tela — abre a tela do Jarvis (estilo filme) no navegador.
+#
+# Liga o servidor do Jarvis (jarvis serve) se ele ainda não estiver ligado,
+# serve a tela em http://localhost:3000 e abre o navegador.
+# Para desligar, aperte Ctrl+C neste terminal.
+
+set -uo pipefail
+
+OPENJARVIS_HOME="${OPENJARVIS_HOME:-$HOME/.openjarvis}"
+JARVIS_BIN="$OPENJARVIS_HOME/.venv/bin/jarvis"
+TELA_DIR="${JARVIS_TELA_DIR:-$HOME/.local/share/jarvis-project/tela}"
+API="http://127.0.0.1:8000"
+LOG="$OPENJARVIS_HOME/jarvis-tela.log"
+PIDS=()
+
+desligar() {
+    local pid
+    for pid in "${PIDS[@]}"; do
+        kill "$pid" 2>/dev/null
+    done
+}
+trap desligar EXIT
+trap 'echo; echo "Jarvis desligado."; exit 0' INT TERM
+
+if [[ ! -f "$TELA_DIR/index.html" ]]; then
+    echo "Não achei a tela do Jarvis em $TELA_DIR." >&2
+    echo "Rode o instalador de novo: bash instalar.sh" >&2
+    exit 1
+fi
+
+servidor_ligado() { curl -fs -o /dev/null --max-time 2 "$API/v1/info"; }
+porta_livre() { ! (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+if servidor_ligado; then
+    echo "O servidor do Jarvis já está ligado."
+else
+    if ! porta_livre 8000; then
+        echo "A porta 8000 está ocupada por outro programa. Feche-o e tente de novo." >&2
+        exit 1
+    fi
+    echo "Ligando o servidor do Jarvis (na primeira vez demora alguns minutos)..."
+    "$JARVIS_BIN" serve --host 127.0.0.1 --port 8000 >"$LOG" 2>&1 &
+    PIDS+=("$!")
+    for _ in $(seq 1 300); do
+        servidor_ligado && break
+        if ! kill -0 "${PIDS[0]}" 2>/dev/null; then
+            echo "O servidor do Jarvis parou com erro. Últimas linhas do log ($LOG):" >&2
+            tail -n 20 "$LOG" >&2
+            exit 1
+        fi
+        sleep 1
+    done
+    if ! servidor_ligado; then
+        echo "O servidor demorou demais para ligar. Veja o log: $LOG" >&2
+        exit 1
+    fi
+fi
+
+if ! curl -fs -o /dev/null --max-time 5 "$API/health"; then
+    echo "Aviso: o Ollama (cérebro do Jarvis) não está respondendo. Ligue com:" >&2
+    echo "  sudo systemctl start ollama" >&2
+fi
+
+# O servidor do Jarvis só aceita a tela vinda dessas portas (3000 ou 5174).
+PORTA=3000
+if ! porta_livre "$PORTA"; then
+    PORTA=5174
+    if ! porta_livre "$PORTA"; then
+        echo "As portas 3000 e 5174 estão ocupadas. Feche o programa que usa uma delas." >&2
+        exit 1
+    fi
+fi
+python3 -m http.server "$PORTA" --bind 127.0.0.1 --directory "$TELA_DIR" >/dev/null 2>&1 &
+PIDS+=("$!")
+sleep 1
+
+URL="http://localhost:$PORTA/"
+if command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$URL" >/dev/null 2>&1 &
+elif command -v wslview >/dev/null 2>&1; then
+    wslview "$URL" >/dev/null 2>&1 &
+fi
+
+echo
+echo "Tela do Jarvis: $URL"
+echo "Se o navegador não abriu, copie o endereço acima."
+echo "Para desligar, aperte Ctrl+C aqui."
+wait
