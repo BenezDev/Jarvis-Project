@@ -247,7 +247,7 @@
 <form class="controles" id="form" autocomplete="off">
   <button type="button" id="mic" aria-label="Falar com o Jarvis" title="Falar (Espaço)">🎙</button>
   <input type="text" id="texto" placeholder="Escreva para o Jarvis…">
-  <button type="button" id="continuo" aria-pressed="true" title="Depois de responder, o Jarvis volta a ouvir sozinho">CONVERSA</button>
+  <button type="button" id="continuo" aria-pressed="true" title="Mãos livres: o Jarvis ouve o tempo todo, sem precisar clicar">CONVERSA</button>
   <button type="button" id="mudo" aria-pressed="false" title="Desliga a voz do Jarvis">MUDO</button>
 </form>
 
@@ -288,6 +288,10 @@ let gravador = null;
 let vadTimer = null;
 let fonteAtual = null;
 let abortador = null;
+let vigiaTimer = null;
+let abrindoMic = false;
+let precisaToque = false;
+let fundoRuido = 0.005;
 let nivelMic = 0;
 let nivel = 0;
 
@@ -370,7 +374,7 @@ async function verificarStatus() {
   $("info-motor").textContent = info.engine || "—";
   if (estado === "offline") {
     mudarEstado("idle");
-    legenda("", "Às suas ordens. Toque no núcleo ou aperte Espaço para falar.");
+    legenda("", continuo ? "Às suas ordens. Pode falar." : "Às suas ordens. Toque no núcleo ou aperte Espaço para falar.");
   }
 
   fetch(API + "/health", { cache: "no-store" })
@@ -378,7 +382,7 @@ async function verificarStatus() {
     .catch(() => ponto("st-cerebro", "erro"));
 
   pegarJson("/v1/speech/health")
-    .then((j) => { ouvidoOk = !!j.available; ponto("st-ouvido", ouvidoOk ? "ok" : "erro"); })
+    .then((j) => { ouvidoOk = !!j.available; ponto("st-ouvido", ouvidoOk ? "ok" : "erro"); ligarMaosLivres(); })
     .catch(() => { ouvidoOk = false; ponto("st-ouvido", "erro"); });
 
   // A primeira checagem da voz carrega o Kokoro, que pode demorar.
@@ -401,8 +405,33 @@ async function prepararAudio() {
     saidaAnalisador.fftSize = 512;
     saidaAnalisador.connect(audioCtx.destination);
   }
-  if (audioCtx.state === "suspended") await audioCtx.resume();
+  // Sem um toque na página, o navegador pode não deixar o som ligar; aí
+  // resume() nunca termina, então não espera por ele para sempre.
+  if (audioCtx.state === "suspended") {
+    await Promise.race([audioCtx.resume(), new Promise((r) => setTimeout(r, 500))]);
+  }
 }
+
+function somLiberado() {
+  return audioCtx && audioCtx.state === "running";
+}
+
+// Modo conversa (mãos livres): o Jarvis fica ouvindo sem precisar de botão.
+// Roda a cada checagem de status, então também volta a ouvir depois de um erro.
+function ligarMaosLivres() {
+  if (continuo && ouvidoOk && estado === "idle") ouvir();
+}
+
+// O navegador bloqueou o som até alguém tocar na página: o primeiro toque ou
+// tecla libera o som e o microfone.
+function primeiroToque() {
+  if (!precisaToque) return;
+  precisaToque = false;
+  mudarEstado(estado);
+  ligarMaosLivres();
+}
+addEventListener("pointerdown", primeiroToque, true);
+addEventListener("keydown", primeiroToque, true);
 
 async function prepararMicrofone() {
   if (microfone) return;
@@ -423,16 +452,27 @@ function tipoGravacao() {
 // ---------- ouvir ----------
 
 async function ouvir() {
-  if (estado !== "idle") return;
+  // Um toque e a checagem de status podem chamar ao mesmo tempo.
+  if (estado !== "idle" || abrindoMic) return;
   if (!ouvidoOk) {
     legenda("", "", "O ouvido do Jarvis (Whisper) não está pronto. Confira o status no canto direito.");
     return;
   }
+  abrindoMic = true;
   try {
     await prepararAudio();
     await prepararMicrofone();
   } catch (e) {
     legenda("", "", "Não consegui usar o microfone. Libere o acesso ao microfone no navegador e tente de novo.");
+    return;
+  } finally {
+    abrindoMic = false;
+  }
+  if (estado !== "idle") return;
+  // Com o som bloqueado, o microfone chega mudo e ele nunca perceberia a fala.
+  if (!somLiberado()) {
+    precisaToque = true;
+    mudarEstado("idle", "TOQUE NA TELA PARA LIGAR O SOM");
     return;
   }
 
@@ -442,9 +482,12 @@ async function ouvir() {
   rec.manter = true;
   rec.ondataavailable = (e) => { if (e.data.size) pedacos.push(e.data); };
   rec.onstop = () => {
-    if (gravador === rec) gravador = null;
+    // Esc pode já ter aberto uma gravação nova; aí esta não mexe no estado.
+    const atual = gravador === rec;
+    if (atual) gravador = null;
     if (!rec.manter) {
-      if (estado === "listening") mudarEstado("idle");
+      if (atual && estado === "listening") mudarEstado("idle");
+      if (rec.recomecar && continuo) ouvir();
       return;
     }
     entender(new Blob(pedacos, { type: pedacos[0] ? pedacos[0].type : tipo }));
@@ -479,15 +522,20 @@ function iniciarDeteccaoDeFala() {
 
     if (agora - inicio < 300) { ruido += rms; nRuido++; return; }
     const fundo = nRuido ? ruido / nRuido : 0.005;
+    fundoRuido = fundo;
     const limiar = Math.min(0.05, Math.max(0.012, fundo * 3));
 
     if (rms > limiar) {
       tempoFalando += dt;
       ultimaVoz = agora;
-      if (tempoFalando > 200) falou = true;
+      // No modo conversa ele ouve o tempo todo: exige mais fala para um
+      // barulho curto (porta, tosse) não virar pergunta.
+      if (tempoFalando > (continuo ? 350 : 200)) falou = true;
     }
     if (falou && agora - ultimaVoz > 1200) return pararDeOuvir(true);
     if (!falou && agora - inicio > 8000) {
+      // Silêncio: no modo conversa, recomeça a gravação e continua ouvindo.
+      if (continuo) return pararDeOuvir(false, true);
       legenda("", "Não ouvi nada. Toque no núcleo quando quiser falar.");
       return pararDeOuvir(false);
     }
@@ -495,15 +543,19 @@ function iniciarDeteccaoDeFala() {
   }, 50);
 }
 
-function pararDeOuvir(manter) {
+function pararDeOuvir(manter, recomecar = false) {
   clearInterval(vadTimer);
   vadTimer = null;
   nivelMic = 0;
   if (gravador && gravador.state !== "inactive") {
     gravador.manter = manter;
+    gravador.recomecar = recomecar;
     gravador.stop();
   }
 }
+
+// O Whisper costuma inventar estas frases quando só ouve ruído.
+const FRASES_DE_RUIDO = /^(obrigad[oa]( por assistir)?|tchau|legendas? pela comunidade.*|amara\.org|\.+|…)[.!]*$/i;
 
 async function entender(audio) {
   mudarEstado("transcribing");
@@ -524,18 +576,19 @@ async function entender(audio) {
     legenda("", "", "Não consegui entender o áudio: " + escapar(String(e.message || e)));
     return;
   }
-  if (!texto) {
+  if (!texto || FRASES_DE_RUIDO.test(texto)) {
     mudarEstado("idle");
+    // No modo conversa, ruído não merece resposta: só volta a ouvir.
+    if (continuo) return ouvir();
     legenda("", "Não entendi. Pode repetir?");
-    if (continuo) ouvir();
     return;
   }
-  perguntar(texto, true);
+  perguntar(texto);
 }
 
 // ---------- pensar ----------
 
-async function perguntar(texto, porVoz) {
+async function perguntar(texto) {
   legenda(texto, "");
   historico.push({ role: "user", content: texto });
   mudarEstado("thinking");
@@ -562,8 +615,8 @@ async function perguntar(texto, porVoz) {
   legenda(texto, resposta || "(sem resposta)");
   const sinal = abortador.signal;
   await falar(resposta, sinal);
-  // Esc ou uma nova pergunta cancelam o sinal; aí ele não volta a ouvir sozinho.
-  if (!sinal.aborted && estado === "idle" && porVoz && continuo) ouvir();
+  // Uma nova pergunta ou uma interrupção cancelam o sinal e cuidam de ouvir.
+  if (!sinal.aborted && estado === "idle" && continuo) ouvir();
 }
 
 // ---------- falar ----------
@@ -621,10 +674,46 @@ function tocar(buffer) {
   });
 }
 
+// Modo conversa: se você começar a falar enquanto ele fala, ele para e escuta.
+// O limiar é alto porque o microfone também capta um pouco da voz dele.
+function vigiarInterrupcao() {
+  if (!continuo || !micAnalisador || vigiaTimer) return;
+  const amostras = new Float32Array(micAnalisador.fftSize);
+  const limiar = Math.max(0.04, fundoRuido * 6);
+  let anterior = performance.now();
+  let tempoFalando = 0;
+  vigiaTimer = setInterval(() => {
+    if (estado !== "speaking") { clearInterval(vigiaTimer); vigiaTimer = null; return; }
+    micAnalisador.getFloatTimeDomainData(amostras);
+    let soma = 0;
+    for (let i = 0; i < amostras.length; i++) soma += amostras[i] * amostras[i];
+    const rms = Math.sqrt(soma / amostras.length);
+    const agora = performance.now();
+    const dt = agora - anterior;
+    anterior = agora;
+    tempoFalando = rms > limiar ? tempoFalando + dt : Math.max(0, tempoFalando - dt);
+    if (tempoFalando > 300) {
+      parar();
+      ouvir();
+    }
+  }, 50);
+}
+
 async function falar(texto, sinal) {
   const limpo = paraFala(texto);
-  if (mudo || !vozOk || !limpo) { mudarEstado("idle"); return; }
+  if (mudo || !limpo) { mudarEstado("idle"); return; }
+  if (!vozOk) {
+    mudarEstado("idle");
+    legenda("", texto, "A voz do Jarvis (Kokoro) ainda não está pronta. Confira o status no canto direito.");
+    return;
+  }
   await prepararAudio();
+  if (!somLiberado()) {
+    precisaToque = true;
+    mudarEstado("idle", "TOQUE NA TELA PARA LIGAR O SOM");
+    legenda("", texto, "O navegador bloqueou o som. Toque na tela uma vez para o Jarvis falar.");
+    return;
+  }
   mudarEstado("thinking", "PREPARANDO A VOZ");
   const blocos = frases(limpo);
   try {
@@ -637,6 +726,7 @@ async function falar(texto, sinal) {
       }
       if (sinal.aborted) return;
       mudarEstado("speaking");
+      vigiarInterrupcao();
       await tocar(buffer);
       if (sinal.aborted || estado !== "speaking") return;
     }
@@ -651,6 +741,7 @@ async function falar(texto, sinal) {
 
 function parar() {
   if (abortador) abortador.abort();
+  if (vigiaTimer) { clearInterval(vigiaTimer); vigiaTimer = null; }
   if (fonteAtual) { try { fonteAtual.stop(); } catch (e) { /* já parou */ } fonteAtual = null; }
   if (gravador) pararDeOuvir(false);
   if (estado !== "offline") mudarEstado("idle");
@@ -674,14 +765,20 @@ $("form").addEventListener("submit", (e) => {
   if (estado !== "idle") parar();
   campo.value = "";
   prepararAudio().catch(() => {});
-  perguntar(texto, false);
+  perguntar(texto);
 });
 
 function atualizarBotoes() {
   $("continuo").setAttribute("aria-pressed", String(continuo));
   $("mudo").setAttribute("aria-pressed", String(mudo));
 }
-$("continuo").addEventListener("click", () => { continuo = !continuo; salvarPref("jarvis.continuo", continuo); atualizarBotoes(); });
+$("continuo").addEventListener("click", () => {
+  continuo = !continuo;
+  salvarPref("jarvis.continuo", continuo);
+  atualizarBotoes();
+  if (continuo) ligarMaosLivres();
+  else if (estado === "listening") pararDeOuvir(false);
+});
 $("mudo").addEventListener("click", () => {
   mudo = !mudo;
   salvarPref("jarvis.mudo", mudo);
@@ -691,7 +788,12 @@ $("mudo").addEventListener("click", () => {
 atualizarBotoes();
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { parar(); return; }
+  if (e.key === "Escape") {
+    // No modo conversa, Esc só interrompe a resposta: ele volta a ouvir.
+    parar();
+    if (continuo) ouvir();
+    return;
+  }
   if (e.code === "Space" && document.activeElement !== $("texto")) {
     e.preventDefault();
     // Sem isso o Espaço também "clicaria" o último botão usado.
