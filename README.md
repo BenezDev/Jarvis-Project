@@ -103,6 +103,8 @@ Isso liga tudo de uma vez: a IA (Ollama), o servidor do Jarvis (porta `8765`) e 
 * **Escrever:** também dá para digitar na caixa de texto.
 * **Mudo:** o botão `MUDO` desliga a voz dele; as respostas continuam aparecendo na tela.
 * O painel da direita mostra se o servidor, a IA, o ouvido (Whisper) e a voz (Kokoro) estão prontos.
+* **Pendências:** o painel da esquerda guarda suas tarefas neste navegador. Escreva no campo ou fale: "adiciona tarefa pagar boleto", "marca pagar boleto como feita", "remove a tarefa pagar boleto" ou "quais são minhas pendências". O Jarvis também vê a lista quando você pede para planejar o dia.
+* **Calendário e comandos:** à direita ficam o calendário do mês e botões rápidos (planejar o dia, revisar pendências, notícias de hoje e previsão do tempo).
 
 Deixe a janela do terminal aberta enquanto usa. Para desligar o Jarvis, feche essa janela ou aperte `Ctrl` + `C` nela.
 

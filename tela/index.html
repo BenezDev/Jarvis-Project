@@ -79,10 +79,21 @@
     text-transform: uppercase;
   }
 
-  .painel {
+  .coluna {
     position: fixed;
     top: 24px;
-    min-width: 210px;
+    width: 250px;
+    max-height: calc(100vh - 150px);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .coluna.esq { left: 24px; }
+  .coluna.dir { right: 24px; }
+
+  .painel {
+    position: relative;
+    min-height: 0;
     padding: 12px 16px;
     border: 1px solid var(--ciano-linha);
     background: rgba(4, 18, 31, 0.55);
@@ -91,8 +102,6 @@
     letter-spacing: 0.08em;
     clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
   }
-  .painel.esq { left: 24px; }
-  .painel.dir { right: 24px; }
   .painel h2 {
     margin: 0 0 8px;
     font-size: 11px;
@@ -204,8 +213,59 @@
     pointer-events: none;
   }
 
+  /* pendências */
+  .painel.tarefas { display: flex; flex-direction: column; flex: 1 1 auto; }
+  .tarefas h2 { display: flex; justify-content: space-between; }
+  .tarefas h2 span { color: var(--texto-fraco); letter-spacing: 0.1em; }
+  .nova { display: flex; gap: 6px; margin-bottom: 8px; }
+  .nova input {
+    flex: 1; min-width: 0; height: 32px; padding: 0 8px;
+    border: 1px solid var(--ciano-linha); background: rgba(2, 8, 14, 0.7);
+    color: var(--texto); font: 14px var(--fonte); outline: none;
+  }
+  .nova input:focus { border-color: var(--ciano); }
+  .nova button, .comandos button {
+    border: 1px solid var(--ciano-linha); background: rgba(95, 212, 255, 0.08);
+    color: var(--ciano); font: 600 11px var(--fonte); letter-spacing: 0.14em; cursor: pointer;
+  }
+  .nova button { padding: 0 10px; }
+  .nova button:hover, .comandos button:hover { border-color: var(--ciano); background: rgba(95, 212, 255, 0.16); }
+  .lista { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 4px; }
+  .lista li { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-left: 2px solid var(--ciano); background: rgba(95, 212, 255, 0.05); }
+  .lista li.feita { border-left-color: #36505f; opacity: 0.55; }
+  .lista li.feita .txt { text-decoration: line-through; }
+  .lista li.vazia { border: 0; background: none; color: var(--texto-fraco); font-size: 13px; letter-spacing: 0.02em; }
+  .lista button { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+  .lista .marca { width: 16px; height: 16px; flex: none; border: 1px solid var(--ciano); color: var(--verde); font-size: 11px; line-height: 14px; }
+  .lista .txt { flex: 1; min-width: 0; text-align: left; font-size: 14px; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+  .lista .tira { color: var(--texto-fraco); font-size: 12px; }
+  .lista .tira:hover { color: var(--vermelho); }
+  .progresso { height: 3px; margin-top: 8px; background: rgba(95, 212, 255, 0.12); }
+  .progresso i { display: block; height: 100%; width: 0; background: var(--ciano); box-shadow: 0 0 8px var(--ciano-fraco); transition: width 0.4s; }
+
+  /* calendário */
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-family: var(--mono); font-size: 11px; }
+  .cal .sem { color: var(--texto-fraco); padding-bottom: 2px; }
+  .cal .dia { padding: 3px 0; border: 1px solid rgba(95, 212, 255, 0.08); }
+  .cal .dia.vazio { border-color: transparent; }
+  .cal .dia.fds { color: var(--ciano); }
+  .cal .dia.hoje { background: var(--ciano); color: var(--bg); font-weight: 700; box-shadow: 0 0 8px var(--ciano-fraco); }
+
+  /* comandos rápidos */
+  .comandos { display: grid; gap: 6px; }
+  .comandos button { height: 30px; text-align: left; padding: 0 10px; }
+
+  @media (min-width: 901px) {
+    .legenda { width: min(900px, calc(100% - 600px)); }
+  }
+
+  /* abaixo disso o lembrete do teclado cobriria os botões */
+  @media (max-width: 1300px) {
+    .dica { display: none; }
+  }
+
   @media (max-width: 900px) {
-    .painel { display: none; }
+    .coluna { display: none; }
     .dica { display: none; }
   }
   @media (max-width: 520px) {
@@ -223,7 +283,8 @@
   <p>Just A Rather Very Intelligent System</p>
 </header>
 
-<section class="painel esq" aria-label="Sistema">
+<aside class="coluna esq">
+<section class="painel" aria-label="Sistema">
   <div class="relogio" id="relogio">--:--:--</div>
   <div class="data" id="data"></div>
   <h2>SISTEMA</h2>
@@ -232,13 +293,36 @@
   <div class="linha"><span>Motor</span><span id="info-motor">—</span></div>
 </section>
 
-<section class="painel dir" aria-label="Status">
+<section class="painel tarefas" aria-labelledby="h-tarefas">
+  <h2 id="h-tarefas">PENDÊNCIAS <span id="tarefas-conta">0</span></h2>
+  <div class="nova">
+    <input type="text" id="nova-tarefa" placeholder="Nova tarefa…" aria-label="Nova tarefa" autocomplete="off">
+    <button type="button" id="add-tarefa">ADD</button>
+  </div>
+  <ul class="lista" id="lista-tarefas"></ul>
+  <div class="progresso" aria-hidden="true"><i id="tarefas-barra"></i></div>
+</section>
+</aside>
+
+<aside class="coluna dir">
+<section class="painel" aria-label="Status">
   <h2>STATUS</h2>
   <div class="linha"><span>Servidor</span><span><i class="ponto" id="st-servidor"></i></span></div>
   <div class="linha"><span>Cérebro (IA)</span><span><i class="ponto" id="st-cerebro"></i></span></div>
   <div class="linha"><span>Ouvido</span><span><i class="ponto" id="st-ouvido"></i></span></div>
   <div class="linha"><span>Voz</span><span><i class="ponto" id="st-voz"></i></span></div>
 </section>
+
+<section class="painel" aria-labelledby="h-cal">
+  <h2 id="h-cal">CALENDÁRIO <span id="cal-mes" style="color: var(--texto-fraco); letter-spacing: 0.1em; float: right"></span></h2>
+  <div class="cal" id="cal"></div>
+</section>
+
+<section class="painel" aria-labelledby="h-cmd">
+  <h2 id="h-cmd">COMANDOS</h2>
+  <div class="comandos" id="comandos"></div>
+</section>
+</aside>
 
 <div class="estado" id="estado" aria-live="polite">INICIANDO</div>
 
@@ -535,9 +619,32 @@ async function entender(audio) {
 
 // ---------- pensar ----------
 
+let perguntaPendente = null;
+
+function tirarDoHistorico(msg) {
+  const i = historico.lastIndexOf(msg);
+  if (i >= 0) historico.splice(i, 1);
+}
+
 async function perguntar(texto, porVoz) {
+  // Comandos de tarefa ("adiciona tarefa X") são resolvidos aqui mesmo, sem a IA.
+  const local = comandoDeTarefa(texto);
+  if (local) {
+    legenda(texto, local);
+    abortador = new AbortController();
+    const sinalLocal = abortador.signal;
+    await falar(local, sinalLocal);
+    if (!sinalLocal.aborted && estado === "idle" && porVoz && continuo) ouvir();
+    return;
+  }
+
   legenda(texto, "");
-  historico.push({ role: "user", content: texto });
+  // Uma pergunta cancelada (Esc ou uma pergunta nova) sai do histórico antes
+  // da próxima ir para a IA, e o erro dela nunca remove a pergunta nova.
+  if (perguntaPendente) tirarDoHistorico(perguntaPendente);
+  const pergunta = { role: "user", content: texto };
+  perguntaPendente = pergunta;
+  historico.push(pergunta);
   mudarEstado("thinking");
   abortador = new AbortController();
   let resposta = "";
@@ -545,14 +652,16 @@ async function perguntar(texto, porVoz) {
     const r = await fetch(API + "/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: info.model || "", messages: historico.slice(-20), stream: false }),
+      body: JSON.stringify({ model: info.model || "", messages: [...contextoDeTarefas(), ...historico.slice(-20)], stream: false }),
       signal: abortador.signal,
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.detail || r.status);
     resposta = ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
+    if (perguntaPendente === pergunta) perguntaPendente = null;
   } catch (e) {
-    historico.pop();
+    tirarDoHistorico(pergunta);
+    if (perguntaPendente === pergunta) perguntaPendente = null;
     if (e.name === "AbortError") return;
     mudarEstado("idle");
     legenda(texto, "", "O Jarvis não conseguiu responder: " + escapar(String(e.message || e)));
@@ -666,15 +775,18 @@ function acaoPrincipal() {
 canvas.addEventListener("click", acaoPrincipal);
 $("mic").addEventListener("click", acaoPrincipal);
 
-$("form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  const campo = $("texto");
-  const texto = campo.value.trim();
-  if (!texto || estado === "offline") return;
+function enviarTexto(texto) {
+  texto = texto.trim();
+  if (!texto || estado === "offline") return false;
   if (estado !== "idle") parar();
-  campo.value = "";
   prepararAudio().catch(() => {});
   perguntar(texto, false);
+  return true;
+}
+
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (enviarTexto($("texto").value)) $("texto").value = "";
 });
 
 function atualizarBotoes() {
@@ -692,7 +804,7 @@ atualizarBotoes();
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { parar(); return; }
-  if (e.code === "Space" && document.activeElement !== $("texto")) {
+  if (e.code === "Space" && !(document.activeElement && document.activeElement.tagName === "INPUT")) {
     e.preventDefault();
     // Sem isso o Espaço também "clicaria" o último botão usado.
     if (document.activeElement && document.activeElement.tagName === "BUTTON") document.activeElement.blur();
@@ -863,6 +975,174 @@ function desenhar(t) {
   requestAnimationFrame(desenhar);
 }
 requestAnimationFrame(desenhar);
+
+// ---------- pendências ----------
+
+const CHAVE_TAREFAS = "jarvis.tarefas";
+let tarefas = [];
+try { tarefas = JSON.parse(localStorage.getItem(CHAVE_TAREFAS) || "[]"); } catch (e) { tarefas = []; }
+if (!Array.isArray(tarefas)) tarefas = [];
+
+function salvarTarefas() {
+  try { localStorage.setItem(CHAVE_TAREFAS, JSON.stringify(tarefas)); } catch (e) { /* sem armazenamento */ }
+  desenharTarefas();
+}
+
+function semAcento(t) {
+  return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+function adicionarTarefa(texto) {
+  texto = texto.trim().replace(/[.!?]+$/, "");
+  if (!texto) return null;
+  const t = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), texto: texto.slice(0, 200), feita: false };
+  tarefas.push(t);
+  salvarTarefas();
+  return t;
+}
+
+function acharTarefa(ref) {
+  const n = semAcento(ref);
+  if (!n) return null;
+  return tarefas.find((t) => semAcento(t.texto) === n) || tarefas.find((t) => semAcento(t.texto).includes(n)) || null;
+}
+
+function desenharTarefas() {
+  const lista = $("lista-tarefas");
+  lista.textContent = "";
+  const ordem = [...tarefas].sort((a, b) => a.feita - b.feita);
+  if (!ordem.length) {
+    const li = document.createElement("li");
+    li.className = "vazia";
+    li.textContent = "Nada pendente. Diga \"adiciona tarefa…\" ou escreva acima.";
+    lista.appendChild(li);
+  }
+  for (const t of ordem) {
+    const li = document.createElement("li");
+    if (t.feita) li.className = "feita";
+    const marca = document.createElement("button");
+    marca.className = "marca";
+    marca.textContent = t.feita ? "✓" : "";
+    marca.setAttribute("aria-label", t.feita ? "Reabrir tarefa" : "Concluir tarefa");
+    const txt = document.createElement("button");
+    txt.className = "txt";
+    txt.textContent = t.texto;
+    const alternar = () => { t.feita = !t.feita; salvarTarefas(); };
+    marca.onclick = alternar;
+    txt.onclick = alternar;
+    const tira = document.createElement("button");
+    tira.className = "tira";
+    tira.textContent = "✕";
+    tira.setAttribute("aria-label", "Remover tarefa");
+    tira.onclick = () => { tarefas = tarefas.filter((x) => x !== t); salvarTarefas(); };
+    li.append(marca, txt, tira);
+    lista.appendChild(li);
+  }
+  const abertas = tarefas.filter((t) => !t.feita).length;
+  $("tarefas-conta").textContent = abertas ? abertas + " ABERTA" + (abertas > 1 ? "S" : "") : "";
+  $("tarefas-barra").style.width = (tarefas.length ? Math.round(((tarefas.length - abertas) / tarefas.length) * 100) : 0) + "%";
+}
+
+function addDoCampo() {
+  if (adicionarTarefa($("nova-tarefa").value)) $("nova-tarefa").value = "";
+}
+$("add-tarefa").addEventListener("click", addDoCampo);
+$("nova-tarefa").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addDoCampo(); } });
+desenharTarefas();
+
+// Entende pedidos de tarefa falados ou escritos. Devolve a resposta ou "" se não for um.
+function comandoDeTarefa(texto) {
+  const t = texto.trim().replace(/[.!?]+$/, "").replace(/^jarvis[,!\s]+/i, "");
+  let m = t.match(/^(?:adicion|anot|cri|coloc|bot|inclu)\w*\s+(?:uma\s+|a\s+)?(?:nova\s+)?(?:tarefa|pend[eê]ncia)\s*(?::|de|para)?\s*(.+)$/i);
+  if (m) {
+    const nova = adicionarTarefa(m[1]);
+    return nova ? `Anotado: ${nova.texto}.` : "";
+  }
+  m = t.match(/^conclu\w*\s+(?:a\s+)?(?:tarefa\s+)?(.+)$/i) || t.match(/^marc\w*\s+(?:a\s+)?(?:tarefa\s+)?(.+?)\s+como\s+(?:feita|conclu[ií]da|pronta)$/i);
+  if (m) {
+    const alvo = acharTarefa(m[1]);
+    if (!alvo) return `Não achei a tarefa "${m[1]}".`;
+    alvo.feita = true;
+    salvarTarefas();
+    return `Feito. Marquei "${alvo.texto}" como concluída.`;
+  }
+  m = t.match(/^(?:remov|apag|exclu|tir)\w*\s+(?:a\s+)?tarefa\s+(.+)$/i);
+  if (m) {
+    const alvo = acharTarefa(m[1]);
+    if (!alvo) return `Não achei a tarefa "${m[1]}".`;
+    tarefas = tarefas.filter((x) => x !== alvo);
+    salvarTarefas();
+    return `Removi "${alvo.texto}".`;
+  }
+  if (/^(?:quais\s+(?:s[aã]o\s+)?|lista\w*\s+|mostr\w*\s+|l[eê]\w*\s+)?(?:as\s+)?minhas\s+(?:tarefas|pend[eê]ncias)$/i.test(t)) {
+    const abertas = tarefas.filter((x) => !x.feita);
+    if (!abertas.length) return "Você não tem pendências. Tudo em dia.";
+    return `Você tem ${abertas.length} pendência${abertas.length > 1 ? "s" : ""}: ` + abertas.map((x) => x.texto).join("; ") + ".";
+  }
+  return "";
+}
+
+// Conta à IA quais são as pendências, para ela poder planejar o dia.
+function contextoDeTarefas() {
+  const abertas = tarefas.filter((t) => !t.feita);
+  if (!abertas.length) return [];
+  return [{
+    role: "system",
+    content: "Pendências atuais do usuário (painel do Jarvis): " + abertas.map((t) => "- " + t.texto).join("\n") +
+      "\nUse esta lista quando ele perguntar sobre tarefas, pendências ou o plano do dia.",
+  }];
+}
+
+// ---------- calendário ----------
+
+function calendario() {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = hoje.getMonth();
+  const primeiro = new Date(ano, mes, 1).getDay();
+  const dias = new Date(ano, mes + 1, 0).getDate();
+  $("cal-mes").textContent = hoje.toLocaleDateString("pt-BR", { month: "short", year: "numeric" }).replace(".", "").toUpperCase();
+  const cal = $("cal");
+  cal.textContent = "";
+  for (const s of ["D", "S", "T", "Q", "Q", "S", "S"]) {
+    const el = document.createElement("div");
+    el.className = "sem";
+    el.textContent = s;
+    cal.appendChild(el);
+  }
+  for (let i = 0; i < primeiro; i++) {
+    const el = document.createElement("div");
+    el.className = "dia vazio";
+    cal.appendChild(el);
+  }
+  for (let d = 1; d <= dias; d++) {
+    const el = document.createElement("div");
+    const sem = (primeiro + d - 1) % 7;
+    el.className = "dia" + (d === hoje.getDate() ? " hoje" : "") + (sem === 0 || sem === 6 ? " fds" : "");
+    el.textContent = d;
+    cal.appendChild(el);
+  }
+}
+calendario();
+setInterval(calendario, 60 * 1000);
+
+// ---------- comandos rápidos ----------
+
+const COMANDOS = [
+  ["PLANEJAR MEU DIA", "Com base nas minhas pendências, monte um plano curto e priorizado para hoje."],
+  ["REVISAR PENDÊNCIAS", "Revise minhas pendências e diga o próximo passo de cada uma, em poucas palavras."],
+  ["NOTÍCIAS DE HOJE", "Pesquise as principais notícias de hoje no Brasil e me dê um resumo curto."],
+  ["PREVISÃO DO TEMPO", "Qual a previsão do tempo para hoje na minha cidade? Se não souber a cidade, pergunte."],
+];
+for (const [rotulo, pedido] of COMANDOS) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = rotulo;
+  b.addEventListener("click", () => {
+    if (!enviarTexto(pedido)) legenda("", "", "O servidor do Jarvis está desligado. No terminal, rode <code>jarvis-tela</code>.");
+  });
+  $("comandos").appendChild(b);
+}
 
 // ---------- início ----------
 
