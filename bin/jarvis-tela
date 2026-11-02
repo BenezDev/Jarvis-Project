@@ -144,6 +144,22 @@ else
     servidor_ligado || falhar "O servidor demorou demais para ligar. Veja o log: $LOG"
 fi
 
+# O Ollama tira a IA da memória depois de 5 minutos parada, e a próxima
+# pergunta espera uns 9 s para ela carregar de novo. Enquanto o Jarvis estiver
+# ligado, carrega a IA já agora e renova o prazo a cada 4 minutos. O contexto
+# tem que ser o mesmo do servidor (JARVIS_NUM_CTX), senão o Ollama recarrega.
+MODELO="$(curl -fs --max-time 2 "$API/v1/info" | python3 -c 'import json, sys; print(json.load(sys.stdin).get("model", ""))' 2>/dev/null)"
+if [[ -n "$MODELO" ]]; then
+    (
+        while true; do
+            curl -fs -o /dev/null --max-time 120 "$OLLAMA/api/generate" \
+                -d "{\"model\": \"$MODELO\", \"keep_alive\": \"10m\", \"options\": {\"num_ctx\": ${JARVIS_NUM_CTX:-16384}}}"
+            sleep 240
+        done
+    ) &
+    PIDS+=("$!")
+fi
+
 # ---- 3. tela ----
 PORTA=""
 for p in "${PORTAS_TELA[@]}"; do

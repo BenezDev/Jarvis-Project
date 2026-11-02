@@ -635,13 +635,17 @@ function paraFala(texto) {
     .slice(0, 4800);
 }
 
-// Divide em frases para começar a falar antes de sintetizar tudo.
+// Divide em frases para começar a falar antes de sintetizar tudo. O primeiro
+// bloco é curto, para a voz sair logo; os outros crescem aos poucos, para cada
+// um ficar pronto enquanto o anterior ainda está tocando.
 function frases(texto) {
   const partes = texto.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) || [texto];
+  const limites = [40, 110, 280];
   const blocos = [];
   let atual = "";
   for (const p of partes) {
-    if ((atual + p).length > 280 && atual) { blocos.push(atual.trim()); atual = ""; }
+    const limite = limites[Math.min(blocos.length, limites.length - 1)];
+    if ((atual + p).length > limite && atual.trim().length >= 40) { blocos.push(atual.trim()); atual = ""; }
     atual += p;
   }
   if (atual.trim()) blocos.push(atual.trim());
