@@ -96,10 +96,13 @@ Dê dois cliques no botão **Jarvis** da área de trabalho (ele também fica no 
 jarvis-tela
 ```
 
-Isso liga tudo de uma vez: a IA (Ollama), o servidor do Jarvis (porta `8765`) e a tela no navegador (`http://localhost:3000`). Se você clicar de novo com ele já ligado, ele só reabre a tela. Na primeira vez demora alguns minutos e o navegador pede para usar o microfone: clique em **Permitir**.
+Isso liga tudo de uma vez: a IA (Ollama), o servidor do Jarvis (porta `8765`) e a tela (`http://localhost:3000`). Se você clicar de novo com ele já ligado, ele só reabre a tela. Na primeira vez demora alguns minutos e a tela pede para usar o microfone: clique em **Permitir**.
 
-* **Falar:** toque no núcleo (ou aperte `Espaço`) e fale. Quando você fica em silêncio, ele entende, pensa e responde falando.
-* **Conversa:** com o botão `CONVERSA` ligado, depois de responder ele volta a ouvir sozinho. Aperte `Esc` para parar.
+A tela abre numa janela própria do Chrome (ou Chromium, Brave, Edge), em que o som e o microfone ligam sem precisar clicar. Sem nenhum deles, ela abre no navegador padrão, e aí pode ser preciso tocar na tela uma vez para ligar o som.
+
+* **Mãos livres:** com o botão `CONVERSA` ligado (o padrão), é só falar. Ele ouve o tempo todo, responde falando e volta a ouvir sozinho.
+* **Interromper:** fale por cima enquanto ele responde, ou aperte `Esc`: ele para e escuta você.
+* **Sem mãos livres:** desligue o `CONVERSA` e toque no núcleo (ou aperte `Espaço`) para falar.
 * **Escrever:** também dá para digitar na caixa de texto.
 * **Mudo:** o botão `MUDO` desliga a voz dele; as respostas continuam aparecendo na tela.
 * O painel da direita mostra se o servidor, a IA, o ouvido (Whisper) e a voz (Kokoro) estão prontos.
@@ -178,6 +181,7 @@ jarvis config set intelligence.default_model qwen3.5:9b
 * **A voz não fala**: rode `bash instalar.sh` de novo para reinstalar o `espeak-ng` e as bibliotecas de voz.
 * **A tela mostra "SERVIDOR DESLIGADO"**: rode `jarvis-tela` no terminal e deixe ele aberto. Se o servidor parar com erro, o motivo fica em `~/.openjarvis/jarvis-tela.log`.
 * **"A porta 8765 está ocupada"**: outro programa usa a porta do Jarvis. Escolha outra: `JARVIS_PORTA=8766 jarvis-tela`.
+* **O Jarvis responde sozinho a barulhos** (TV, música): o ouvido às vezes transforma ruído em palavras. Desligue o botão `CONVERSA` enquanto tiver barulho.
 
 ## Atualizar
 

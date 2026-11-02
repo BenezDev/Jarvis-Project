@@ -54,7 +54,19 @@ servidor_ligado() { curl -fs --max-time 2 "$API/v1/info" 2>/dev/null | grep -q '
 porta_livre() { ! (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 ollama_ligado() { curl -fs -o /dev/null --max-time 2 "$OLLAMA/api/tags"; }
 
+# Abre a tela numa janela própria do Chrome (ou Chromium, Brave, Edge), com
+# um perfil só do Jarvis em que o som pode tocar sem clicar na página: é o que
+# deixa ele ouvir e falar sozinho. Sem nenhum deles, usa o navegador padrão.
 abrir_navegador() {
+    local nav
+    for nav in google-chrome-stable google-chrome chromium chromium-browser brave-browser microsoft-edge-stable; do
+        if command -v "$nav" >/dev/null 2>&1; then
+            "$nav" --app="$1" --user-data-dir="$OPENJARVIS_HOME/navegador" \
+                --autoplay-policy=no-user-gesture-required \
+                --no-first-run --no-default-browser-check --password-store=basic >/dev/null 2>&1 &
+            return
+        fi
+    done
     if command -v xdg-open >/dev/null 2>&1; then
         xdg-open "$1" >/dev/null 2>&1 &
     elif command -v wslview >/dev/null 2>&1; then
@@ -144,6 +156,8 @@ sleep 1
 
 URL="$(url_da_tela "$PORTA")"
 abrir_navegador "$URL"
+# Desligar o Jarvis também fecha a janela dele.
+PIDS+=("$!")
 
 echo
 echo "Jarvis ligado: IA, servidor e tela."
