@@ -96,7 +96,7 @@ Dê dois cliques no botão **Jarvis** da área de trabalho (ele também fica no 
 jarvis-tela
 ```
 
-Isso liga tudo de uma vez: a IA (Ollama), o servidor do Jarvis (porta `8765`) e a tela (`http://localhost:3000`). Se você clicar de novo com ele já ligado, ele só reabre a tela. Na primeira vez demora alguns minutos e a tela pede para usar o microfone: clique em **Permitir**.
+Isso liga tudo de uma vez: a IA (Ollama), o servidor do Jarvis (porta `8765`) e a tela (`http://localhost:3000`). Enquanto ele estiver ligado, a IA fica carregada na memória para responder sem demora. Se você clicar de novo com ele já ligado, ele só reabre a tela. Na primeira vez demora alguns minutos e a tela pede para usar o microfone: clique em **Permitir**.
 
 A tela abre numa janela própria do Chrome (ou Chromium, Brave, Edge), em que o som e o microfone ligam sem precisar clicar. Sem nenhum deles, ela abre no navegador padrão, e aí pode ser preciso tocar na tela uma vez para ligar o som.
 
